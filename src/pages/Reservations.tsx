@@ -157,18 +157,7 @@ const Reservations: React.FC = () => {
             <form onSubmit={handleSubmit} className="p-6">
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {/* Reservation Number */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Reservation Number
-                  </label>
-                  <input
-                    type="text"
-                    value="RES2985"
-                    disabled
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-500"
-                  />
-                  <p className="text-xs text-gray-500 mt-1">This number is automatically generated.</p>
-                </div>
+                
 
                 {/* Guest Name */}
                 <div>

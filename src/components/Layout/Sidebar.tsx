@@ -41,6 +41,12 @@ const Sidebar: React.FC = () => {
       roles: ['ADMIN', 'MANAGER', 'CASHIER'],
     },
     {
+      name: 'Transactions',
+      href: '/transaction',
+      icon: CurrencyDollarIcon,
+      roles: ['ADMIN', 'MANAGER', 'CASHIER'],
+    },
+    {
       name: 'Admin',
       href: '/admin',
       icon: CogIcon,

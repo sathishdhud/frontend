@@ -1,18 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { CurrencyDollarIcon, ReceiptPercentIcon, ClockIcon } from '@heroicons/react/24/outline';
 import { Advance, PaymentMode } from '../types/api';
 import { advanceApi, masterDataApi } from '../services/api';
 import Layout from '../components/Layout/Layout';
 
 const Cashier: React.FC = () => {
+
   const [activeTab, setActiveTab] = useState<'record' | 'edit'>('record');
   const [loading, setLoading] = useState(false);
   const [paymentModes, setPaymentModes] = useState<PaymentMode[]>([]);
-
+  const [contextOptions, setContextOptions] = useState<any[]>([]); // Reservation/Folio/Bill options
   const [formData, setFormData] = useState({
-    receiptNumber: 'AUTO-GEN-5768',
-    contextType: 'reservation', // reservation, inhouse, bill
+    receiptNumber: `AUTO-GEN-${Math.floor(Math.random() * 9000 + 1000)}`,
     contextValue: '',
     date: new Date().toISOString().split('T')[0],
     modeOfPaymentId: '',
@@ -21,20 +20,20 @@ const Cashier: React.FC = () => {
     narration: '',
     guestName: '',
   });
+  // Summary state
+  const [summary, setSummary] = useState({
+    totalToday: 0,
+    transactionCount: 0,
+    avgAmount: 0,
+    lastWeekTotal: 0,
+    chartData: [] as { name: string; amount: number }[],
+  });
 
-  // Mock data for the chart
-  const chartData = [
-    { name: 'Mon', amount: 15000 },
-    { name: 'Tue', amount: 18000 },
-    { name: 'Wed', amount: 12000 },
-    { name: 'Thu', amount: 15000 },
-    { name: 'Fri', amount: 22000 },
-    { name: 'Sat', amount: 19000 },
-    { name: 'Sun', amount: 16000 },
-  ];
 
   useEffect(() => {
     fetchPaymentModes();
+    fetchSummary();
+    // fetchContextOptions(); // Optionally implement autocomplete/search for context
   }, []);
 
   const fetchPaymentModes = async () => {
@@ -48,6 +47,38 @@ const Cashier: React.FC = () => {
     }
   };
 
+  // Fetch summary data for advances (replace with real API call)
+  const fetchSummary = async () => {
+    try {
+      
+      setSummary({
+        totalToday: 15000,
+        transactionCount: 8,
+        avgAmount: 3000,
+        lastWeekTotal: 58500,
+        chartData: [
+          { name: 'Mon', amount: 15000 },
+          { name: 'Tue', amount: 18000 },
+          { name: 'Wed', amount: 12000 },
+          { name: 'Thu', amount: 15000 },
+          { name: 'Fri', amount: 22000 },
+          { name: 'Sat', amount: 19000 },
+          { name: 'Sun', amount: 16000 },
+        ],
+      });
+    } catch (error) {
+      // fallback to zeros
+      setSummary({
+        totalToday: 0,
+        transactionCount: 0,
+        avgAmount: 0,
+        lastWeekTotal: 0,
+        chartData: [],
+      });
+    }
+  };
+
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value, type } = e.target;
     setFormData(prev => ({
@@ -56,35 +87,42 @@ const Cashier: React.FC = () => {
     }));
   };
 
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-
     try {
+      // Determine context type by prefix (simple logic, can be improved)
+      let response;
       const advanceData = {
         guestName: formData.guestName,
         modeOfPaymentId: formData.modeOfPaymentId,
         amount: formData.amount,
         remarks: formData.details,
       };
-
-      let response;
-      
-      if (formData.contextType === 'reservation') {
-        response = await advanceApi.createAdvanceForReservation({
-          ...advanceData,
-          reservationNo: formData.contextValue,
-        });
-      } else {
+      if (/^F/i.test(formData.contextValue)) {
+        // Folio (inhouse)
         response = await advanceApi.createAdvanceForInHouse({
           ...advanceData,
           folioNo: formData.contextValue,
         });
+      } else if (/^B/i.test(formData.contextValue)) {
+        // Bill
+        // TODO: Implement bill advance API if available
+        alert('Bill advances not implemented in API.');
+        setLoading(false);
+        return;
+      } else {
+        // Reservation
+        response = await advanceApi.createAdvanceForReservation({
+          ...advanceData,
+          reservationNo: formData.contextValue,
+        });
       }
-      
-      if (response.data.success) {
+      if (response?.data?.success) {
         alert('Advance recorded successfully!');
         handleClearForm();
+        fetchSummary();
       }
     } catch (error: any) {
       alert(`Error: ${error.response?.data?.message || 'Failed to record advance'}`);
@@ -93,10 +131,10 @@ const Cashier: React.FC = () => {
     }
   };
 
+
   const handleClearForm = () => {
     setFormData({
-      receiptNumber: `AUTO-GEN-${Math.floor(Math.random() * 10000)}`,
-      contextType: 'reservation',
+      receiptNumber: `AUTO-GEN-${Math.floor(Math.random() * 9000 + 1000)}`,
       contextValue: '',
       date: new Date().toISOString().split('T')[0],
       modeOfPaymentId: '',
@@ -111,25 +149,28 @@ const Cashier: React.FC = () => {
     <Layout>
       <div className="space-y-6">
         <div className="flex items-center justify-between">
-          <h1 className="text-3xl font-bold text-gray-900">Advances Management</h1>
-          <div className="flex space-x-2">
+          <h1 className="text-2xl font-bold text-gray-900">Advances Management</h1>
+          <div className="flex rounded-lg overflow-hidden border border-gray-200">
             <button
+              type="button"
               onClick={() => setActiveTab('record')}
-              className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+              className={`px-6 py-2 font-medium transition-colors focus:outline-none ${
                 activeTab === 'record'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  ? 'bg-indigo-600 text-white'
+                  : 'bg-gray-100 text-gray-700'
               }`}
             >
               Record Advance
             </button>
             <button
+              type="button"
               onClick={() => setActiveTab('edit')}
-              className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+              className={`px-6 py-2 font-medium transition-colors focus:outline-none ${
                 activeTab === 'edit'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  ? 'bg-indigo-600 text-white'
+                  : 'bg-gray-100 text-gray-700'
               }`}
+              disabled
             >
               Edit Advance
             </button>
@@ -161,21 +202,20 @@ const Cashier: React.FC = () => {
                       />
                     </div>
 
-                    {/* Context Selection */}
+                    {/* Context Dropdown (single field) */}
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
                         Reservation / Room / Bill Number
                       </label>
-                      <select
-                        name="contextType"
-                        value={formData.contextType}
+                      <input
+                        type="text"
+                        name="contextValue"
+                        value={formData.contextValue}
                         onChange={handleInputChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      >
-                        <option value="reservation">Reservation</option>
-                        <option value="inhouse">In-House</option>
-                        <option value="bill">Bill</option>
-                      </select>
+                        placeholder="Select context"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                        required
+                      />
                     </div>
 
                     {/* Date */}
@@ -194,22 +234,6 @@ const Cashier: React.FC = () => {
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {/* Context Value */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        {formData.contextType === 'reservation' ? 'Reservation Number' :
-                         formData.contextType === 'inhouse' ? 'Folio Number' : 'Bill Number'}
-                      </label>
-                      <input
-                        type="text"
-                        name="contextValue"
-                        value={formData.contextValue}
-                        onChange={handleInputChange}
-                        placeholder="Select context"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      />
-                    </div>
-
                     {/* Guest Name */}
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -220,7 +244,7 @@ const Cashier: React.FC = () => {
                         name="guestName"
                         value={formData.guestName}
                         onChange={handleInputChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                       />
                     </div>
                   </div>
@@ -276,7 +300,7 @@ const Cashier: React.FC = () => {
                       value={formData.details}
                       onChange={handleInputChange}
                       rows={3}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                       placeholder="Payment details..."
                     />
                   </div>
@@ -291,7 +315,7 @@ const Cashier: React.FC = () => {
                       value={formData.narration}
                       onChange={handleInputChange}
                       rows={2}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                       placeholder="Additional notes..."
                     />
                   </div>
@@ -301,7 +325,7 @@ const Cashier: React.FC = () => {
                     <button
                       type="submit"
                       disabled={loading}
-                      className="flex-1 bg-gradient-to-r from-green-600 to-green-700 text-white font-semibold py-3 px-4 rounded-lg hover:from-green-700 hover:to-green-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="flex-1 bg-indigo-600 text-white font-semibold py-3 px-4 rounded-lg hover:bg-indigo-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {loading ? 'Saving...' : 'Save Advance'}
                     </button>
@@ -330,37 +354,32 @@ const Cashier: React.FC = () => {
             <div className="p-6 border-b border-gray-200">
               <h3 className="text-lg font-semibold text-gray-900">Summary of Advances</h3>
             </div>
-
             <div className="p-6 space-y-6">
               {/* Stats */}
               <div className="space-y-4">
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-gray-600">Total Advances Today</span>
-                  <span className="text-lg font-semibold text-gray-900">Rs. 15,000</span>
+                  <span className="text-lg font-semibold text-gray-900">Rs. {summary.totalToday.toLocaleString()}</span>
                 </div>
-                
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-gray-600">Number of Transactions</span>
-                  <span className="text-lg font-semibold text-gray-900">8</span>
+                  <span className="text-lg font-semibold text-gray-900">{summary.transactionCount}</span>
                 </div>
-                
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-gray-600">Avg. Advance Amount</span>
-                  <span className="text-lg font-semibold text-gray-900">Rs. 3,000</span>
+                  <span className="text-lg font-semibold text-gray-900">Rs. {summary.avgAmount.toLocaleString()}</span>
                 </div>
-                
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-gray-600">Last Week Total</span>
-                  <span className="text-lg font-semibold text-gray-900">Rs. 58,500</span>
+                  <span className="text-lg font-semibold text-gray-900">Rs. {summary.lastWeekTotal.toLocaleString()}</span>
                 </div>
               </div>
-
               {/* Chart */}
               <div>
                 <h4 className="text-sm font-medium text-gray-700 mb-3">Weekly Advances</h4>
                 <div className="h-32">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={chartData}>
+                    <BarChart data={summary.chartData}>
                       <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
                       <XAxis 
                         dataKey="name" 
@@ -394,7 +413,6 @@ const Cashier: React.FC = () => {
                   </ResponsiveContainer>
                 </div>
               </div>
-
               <div className="text-xs text-gray-500 text-center">
                 Real-time data synchronization is active.
               </div>

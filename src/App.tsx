@@ -9,6 +9,8 @@ import Dashboard from './pages/Dashboard';
 import Reservations from './pages/Reservations';
 import CheckIn from './pages/CheckIn';
 import Cashier from './pages/Cashier';
+import TransactionForm from './pages/TransactionForm';
+
 
 function App() {
   return (
@@ -41,6 +43,11 @@ function App() {
             <Route path="/cashier" element={
               <ProtectedRoute requiredRoles={['ADMIN', 'MANAGER', 'CASHIER']}>
                 <Cashier />
+              </ProtectedRoute>
+            } />
+            <Route path="/transaction" element={
+              <ProtectedRoute requiredRoles={['ADMIN', 'MANAGER', 'CASHIER']}>
+                <TransactionForm />
               </ProtectedRoute>
             } />
             

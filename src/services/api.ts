@@ -1,3 +1,5 @@
+// Transaction APIs
+
 import axios, { AxiosResponse } from 'axios';
 import { ApiResponse, User, Room, RoomStats, Reservation, CheckIn, Advance, PaymentMode, RoomType, Company, PlanType } from '../types/api';
 
@@ -55,6 +57,24 @@ export const roomApi = {
   
   updateRoomStatus: (roomId: string, status: string): Promise<AxiosResponse<ApiResponse<Room>>> =>
     apiClient.put(`/rooms/${roomId}/status/${status}`),
+
+  // Fetch details for a single room
+  getRoomById: (roomId: string): Promise<AxiosResponse<ApiResponse<Room>>> =>
+    apiClient.get(`/rooms/${roomId}`),
+};
+
+export const transactionApi = {
+  createInhouseTransaction: (data: {
+    folioNo: string;
+    guestName: string;
+    accHeadId: string;
+    amount: number;
+    narration?: string;
+    
+  }): Promise<AxiosResponse<ApiResponse<any>>> =>
+    apiClient.post('/transactions/inhouse', data),
+  getTransactionsByFolio: (folioNo: string): Promise<AxiosResponse<ApiResponse<any[]>>> =>
+    apiClient.get(`/transactions/folio/${folioNo}`),
 };
 
 // Reservation APIs

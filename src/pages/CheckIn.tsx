@@ -11,7 +11,7 @@ const CheckIn: React.FC = () => {
   const [advances, setAdvances] = useState<Advance[]>([]);
 
   const [formData, setFormData] = useState({
-    reservationNo: 'RES78901',
+    reservationNo: '',
     folioNo: 'F253904',
     guestName: 'Alice Wonderland',
     arrivalDate: '2024-07-25',

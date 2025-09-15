@@ -21,6 +21,29 @@ const Dashboard: React.FC = () => {
   const [currentPage, setCurrentPage] = useState(1);
   const roomsPerPage = 12;
 
+  // View Details modal state
+  const [detailsOpen, setDetailsOpen] = useState(false);
+  const [detailsLoading, setDetailsLoading] = useState(false);
+  const [detailsRoom, setDetailsRoom] = useState<Room | null>(null);
+  const [detailsError, setDetailsError] = useState<string | null>(null);
+
+  const handleViewDetails = async (roomId: string) => {
+    setDetailsOpen(true);
+    setDetailsLoading(true);
+    setDetailsError(null);
+    try {
+      const res = await roomApi.getRoomById(roomId);
+      if (res.data.success) {
+        setDetailsRoom(res.data.data);
+      } else {
+        setDetailsError(res.data.message || 'Failed to fetch details');
+      }
+    } catch (err) {
+      setDetailsError('Failed to fetch details');
+    }
+    setDetailsLoading(false);
+  };
+
   useEffect(() => {
     fetchRooms();
     fetchRoomStats();
@@ -207,7 +230,10 @@ const Dashboard: React.FC = () => {
                 </div>
 
                 <div className="mt-4 flex space-x-2">
-                  <button className="flex-1 flex items-center justify-center space-x-1 px-3 py-2 text-xs font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors">
+                  <button
+                    className="flex-1 flex items-center justify-center space-x-1 px-3 py-2 text-xs font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors"
+                    onClick={() => handleViewDetails(room.roomId)}
+                  >
                     <EyeIcon className="w-4 h-4" />
                     <span>View Details</span>
                   </button>
@@ -263,6 +289,62 @@ const Dashboard: React.FC = () => {
           Room statuses are updated in real-time. Click the refresh icon for the latest data.
         </div>
       </div>
+    {/* Details Modal */}
+    {detailsOpen && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
+        <div className="bg-white rounded-xl shadow-lg p-8 w-full max-w-md relative">
+          <button
+            className="absolute top-3 right-3 text-gray-400 hover:text-gray-600"
+            onClick={() => { setDetailsOpen(false); setDetailsRoom(null); }}
+            aria-label="Close"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+          <h2 className="text-xl font-bold mb-4">Room Details</h2>
+          {detailsLoading ? (
+            <div className="flex items-center justify-center h-24">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            </div>
+          ) : detailsError ? (
+            <div className="text-red-500">{detailsError}</div>
+          ) : detailsRoom ? (
+            <div className="space-y-4">
+              <div className="flex items-center">
+              <span className="w-32 font-semibold text-gray-700">Room No:</span>
+              <span className="text-gray-900">{detailsRoom.roomNo}</span>
+              </div>
+              <div className="flex items-center">
+              <span className="w-32 font-semibold text-gray-700">Floor:</span>
+              <span className="text-gray-900">{detailsRoom.floor}</span>
+              </div>
+              <div className="flex items-center">
+              <span className="w-32 font-semibold text-gray-700">Status:</span>
+              <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium border ${getStatusColor(detailsRoom.status)}`}>
+                {getStatusIcon(detailsRoom.status)}
+                <span className="ml-1">{getStatusText(detailsRoom.status)}</span>
+              </span>
+              </div>
+              <div className="flex items-center">
+              <span className="w-32 font-semibold text-gray-700">Room Type:</span>
+              <span className="text-gray-900">{detailsRoom.roomTypeName || '-'}</span>
+              </div>
+              <div className="flex items-center">
+              <span className="w-32 font-semibold text-gray-700">Guest Name:</span>
+              <span className="text-gray-900">{detailsRoom.guestName || '-'}</span>
+              </div>
+              <div className="flex items-center">
+              <span className="w-32 font-semibold text-gray-700">Folio No:</span>
+              <span className="text-gray-900">{detailsRoom.folioNo || '-'}</span>
+              </div>
+            </div>
+          ) : (
+            <div>No details found.</div>
+          )}
+        </div>
+      </div>
+    )}
     </Layout>
   );
 };
