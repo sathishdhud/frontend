@@ -162,23 +162,24 @@ const CheckIn: React.FC = () => {
             </div>
 
             <form onSubmit={handleSubmit} className="p-6">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                 {/* Reservation Number */}
-                <div>
+                {!isWalkIn && (
+                  <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Reservation Number
                   </label>
                   <div className="relative">
                     <input
-                      type="text"
-                      name="reservationNo"
-                      value={formData.reservationNo}
-                      onChange={handleInputChange}
-                      disabled={isWalkIn}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-50"
+                    type="text"
+                    name="reservationNo"
+                    value={formData.reservationNo}
+                    onChange={handleInputChange}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     />
                   </div>
-                </div>
+                  </div>
+                )}
 
                 {/* Folio Number */}
                 <div>
