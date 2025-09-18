@@ -931,7 +931,7 @@ const Cashier: React.FC = () => {
                     {/* Context Dropdown (single field) */}
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Folio 
+                        Folio / Bill / Reservation *
                       </label>
                       <input
                         type="text"
