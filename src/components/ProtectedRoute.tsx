@@ -22,12 +22,25 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, requiredRoles
     return <Navigate to="/login" replace />;
   }
 
+  // Special handling for housekeeping users - they should not have access to dashboard
+  const isHousekeepingUser = user.userTypeRole === 'HOUSEKEEPING' || user.userTypeId === 'HOUSEKEEPING';
+  
+  // If this is the dashboard route and the user is a housekeeping user, redirect them to housekeeping
+  if (window.location.pathname === '/dashboard' && isHousekeepingUser) {
+    return <Navigate to="/housekeeping" replace />;
+  }
+
   if (requiredRoles && requiredRoles.length > 0) {
     const hasAccess = requiredRoles.some(role => 
       role === user.userTypeRole || role === user.userTypeId
     );
     
     if (!hasAccess) {
+      // Special case: if a housekeeping user tries to access a restricted page, redirect to housekeeping
+      if (isHousekeepingUser) {
+        return <Navigate to="/housekeeping" replace />;
+      }
+      
       return (
         <div className="min-h-screen flex items-center justify-center bg-gray-50">
           <div className="text-center">

@@ -7,7 +7,8 @@ import {
   CurrencyDollarIcon, 
   CogIcon, 
   ChartBarIcon,
-  BuildingOfficeIcon
+  BuildingOfficeIcon,
+  DocumentTextIcon
 } from '@heroicons/react/24/outline';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -15,56 +16,80 @@ const Sidebar: React.FC = () => {
   const location = useLocation();
   const { user } = useAuth();
 
-  const menuItems = [
-    {
-      name: 'Dashboard',
-      href: '/dashboard',
-      icon: HomeIcon,
-      roles: ['ADMIN', 'MANAGER', 'CASHIER', 'RECEPTIONIST', 'HOUSEKEEPING'],
-    },
-    {
-      name: 'Reservations',
-      href: '/reservations',
-      icon: CalendarIcon,
-      roles: ['ADMIN', 'MANAGER', 'RECEPTIONIST'],
-    },
-    {
-      name: 'Check-In',
-      href: '/check-in',
-      icon: UserPlusIcon,
-      roles: ['ADMIN', 'MANAGER', 'RECEPTIONIST'],
-    },
-    {
-      name: 'Cashier',
-      href: '/cashier',
-      icon: CurrencyDollarIcon,
-      roles: ['ADMIN', 'MANAGER', 'CASHIER'],
-    },
-    {
-      name: 'Transactions',
-      href: '/transaction',
-      icon: CurrencyDollarIcon,
-      roles: ['ADMIN', 'MANAGER', 'CASHIER'],
-    },
-    {
-      name: 'Admin',
-      href: '/admin',
-      icon: CogIcon,
-      roles: ['ADMIN'],
-    },
-    {
-      name: 'Reports',
-      href: '/reports',
-      icon: ChartBarIcon,
-      roles: ['ADMIN', 'MANAGER', 'CASHIER'],
-    },
-    {
-      name: 'Housekeeping',
-      href: '/housekeeping',
-      icon: BuildingOfficeIcon,
-      roles: ['ADMIN', 'MANAGER', 'HOUSEKEEPING'],
-    },
-  ];
+  const getMenuItems = () => {
+    // Special menu for housekeeping users - only show Housekeeping and redirect to it
+    if (user && (user.userTypeRole === 'HOUSEKEEPING' || user.userTypeId === 'HOUSEKEEPING')) {
+      return [
+        {
+          name: 'Housekeeping',
+          href: '/housekeeping',
+          icon: BuildingOfficeIcon,
+          roles: ['HOUSEKEEPING'],
+        },
+      ];
+    }
+    
+    // Default menu for all other users
+    return [
+      {
+        name: 'Dashboard',
+        href: '/dashboard',
+        icon: HomeIcon,
+        roles: ['ADMIN', 'MANAGER', 'CASHIER', 'RECEPTIONIST'],
+      },
+      {
+        name: 'Reservations',
+        href: '/reservations',
+        icon: CalendarIcon,
+        roles: ['ADMIN', 'MANAGER', 'RECEPTIONIST'],
+      },
+      {
+        name: 'Check-In',
+        href: '/check-in',
+        icon: UserPlusIcon,
+        roles: ['ADMIN', 'MANAGER', 'RECEPTIONIST'],
+      },
+      
+      {
+        name: 'Cashier',
+        href: '/cashier',
+        icon: CurrencyDollarIcon,
+        roles: ['ADMIN', 'MANAGER', 'CASHIER'],
+      },
+      {
+        name: 'Transactions',
+        href: '/transaction',
+        icon: CurrencyDollarIcon,
+        roles: ['ADMIN', 'MANAGER', 'CASHIER'],
+      },
+      {
+        name: 'Generate Bill',
+        href: '/generate-bill',
+        icon: DocumentTextIcon,
+        roles: ['ADMIN', 'MANAGER', 'CASHIER'],
+      },
+      {
+        name: 'Admin',
+        href: '/admin',
+        icon: CogIcon,
+        roles: ['ADMIN'],
+      },
+      {
+        name: 'Reports',
+        href: '/reports',
+        icon: ChartBarIcon,
+        roles: ['ADMIN', 'MANAGER', 'CASHIER'],
+      },
+      {
+        name: 'Housekeeping',
+        href: '/housekeeping',
+        icon: BuildingOfficeIcon,
+        roles: ['ADMIN', 'MANAGER', 'HOUSEKEEPING'],
+      },
+    ];
+  };
+  
+  const menuItems = getMenuItems();
 
   const hasAccess = (roles: string[]) => {
     if (!user) return false;

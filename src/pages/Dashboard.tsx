@@ -9,11 +9,13 @@ import {
   EyeIcon,
   UserPlusIcon
 } from '@heroicons/react/24/outline';
+import { useNavigate } from 'react-router-dom';
 import { Room, RoomStats } from '../types/api';
 import { roomApi } from '../services/api';
 import Layout from '../components/Layout/Layout';
 
 const Dashboard: React.FC = () => {
+  const navigate = useNavigate();
   const [rooms, setRooms] = useState<Room[]>([]);
   const [roomStats, setRoomStats] = useState<RoomStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -239,7 +241,10 @@ const Dashboard: React.FC = () => {
                   </button>
                   
                   {room.status === 'VR' && (
-                    <button className="flex-1 flex items-center justify-center space-x-1 px-3 py-2 text-xs font-medium text-blue-700 bg-blue-100 rounded-lg hover:bg-blue-200 transition-colors">
+                    <button 
+                      className="flex-1 flex items-center justify-center space-x-1 px-3 py-2 text-xs font-medium text-blue-700 bg-blue-100 rounded-lg hover:bg-blue-200 transition-colors"
+                      onClick={() => navigate('/check-in')}
+                    >
                       <UserPlusIcon className="w-4 h-4" />
                       <span>Check-In Guest</span>
                     </button>

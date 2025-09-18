@@ -14,6 +14,12 @@ export interface User {
   token?: string;
 }
 
+export interface UserType {
+  userTypeId: string;
+  typeName: string;
+  role?: string;
+}
+
 export interface Room {
   roomId: string;
   roomNo: string;
@@ -55,6 +61,17 @@ export interface Reservation {
   roomsCheckedIn?: number;
   createdAt?: string;
   updatedAt?: string;
+  settlementTypeId?: string;
+  settlementTypeName?: string;
+  arrivalModeId?: string;
+  arrivalModeName?: string;
+  arrivalDetails?: string;
+  nationalityId?: string;
+  nationalityName?: string;
+  refModeId?: string;
+  refModeName?: string;
+  reservationSourceId?: string;
+  reservationSourceName?: string;
 }
 
 export interface CheckIn {
@@ -87,11 +104,34 @@ export interface Advance {
   amount: number;
   narration?: string;
   remarks?: string;
+  creditCardCompany?: string;
+  cardNumber?: string;
+  onlineCompanyName?: string;
+  details?: string;
 }
 
 export interface PaymentMode {
   id: string;
   name: string;
+}
+
+export interface BillPayment {
+  paymentId: string;
+  billNo: string;
+  paymentAmount: number;
+  modeOfPaymentId: string;
+  modeOfPaymentName?: string;
+  paymentNotes?: string;
+  paymentDate: string;
+}
+
+// Add this interface for the bill update request
+export interface BillUpdateRequest {
+  guestName: string;
+  totalAmount: number;
+  advanceAmount: number;
+  paymentNotes: string;
+  advances?: Advance[];
 }
 
 export interface RoomType {
@@ -113,4 +153,82 @@ export interface PlanType {
   planId: string;
   planName: string;
   discountPercentage: number;
+}
+
+export interface Tax {
+  taxId: string;
+  taxName: string;
+  percentage: number;
+}
+
+export interface AccountHead {
+  accountHeadId: string;
+  accountName: string;
+}
+
+export interface Nationality {
+  id: string;
+  nationality: string;
+}
+
+export interface RefMode {
+  id: string;
+  refMode: string;
+}
+
+export interface ArrivalMode {
+  id: string;
+  arrivalMode: string;
+}
+
+export interface ReservationSource {
+  id: string;
+  resvSource: string;
+}
+
+export interface SettlementType {
+  id: string;
+  name: string;
+}
+
+export interface Transaction {
+  transactionId?: string;
+  folioNo: string;
+  billNo?: string;
+  roomId?: string;
+  roomNo?: string;
+  guestName: string;
+  date?: string;
+  auditDate?: string;
+  accHeadId: string;
+  accHeadName?: string;
+  voucherNo?: string;
+  amount: number;
+  narration?: string;
+  createdAt?: string;
+}
+
+export interface HousekeepingTask {
+  taskId?: number;
+  roomId: string;
+  roomNo?: string;
+  floor?: string;
+  status: string;
+  roomTypeId?: string;
+  roomTypeName?: string;
+  guestName?: string;
+  folioNo?: string;
+  assignedTo?: string;
+  notes?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface HousekeepingStats {
+  totalRooms: number;
+  occupiedRooms: number;
+  availableRooms: number;
+  blockedRooms: number;
+  outOfOrderRooms: number;
+  occupancyPercentage: number;
 }

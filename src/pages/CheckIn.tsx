@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { SwitchIcon } from '@heroicons/react/24/outline';
+import React, { useState, useEffect, useRef } from 'react';
+import { ArrowsRightLeftIcon, CheckCircleIcon } from '@heroicons/react/24/outline';
 import { CheckIn as CheckInType, Room, Advance } from '../types/api';
-import { checkInApi, roomApi, advanceApi } from '../services/api';
+import { checkInApi, roomApi, advanceApi, reservationApi } from '../services/api';
 import Layout from '../components/Layout/Layout';
 
 const CheckIn: React.FC = () => {
@@ -9,21 +9,47 @@ const CheckIn: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [availableRooms, setAvailableRooms] = useState<Room[]>([]);
   const [advances, setAdvances] = useState<Advance[]>([]);
+  // Add state for auto-fill loading
+  const [autoFillLoading, setAutoFillLoading] = useState(false);
+  // Add state for reservation info
+  const [reservationInfo, setReservationInfo] = useState<any>(null);
+  // Add notification states
+  const [successMessage, setSuccessMessage] = useState('');
+  const [errorMessage, setErrorMessage] = useState('');
+
+  // Add a ref for debouncing
+  const debounceRef = useRef<NodeJS.Timeout | null>(null);
 
   const [formData, setFormData] = useState({
     reservationNo: '',
-    folioNo: 'F253904',
-    guestName: 'Alice Wonderland',
-    arrivalDate: '2024-07-25',
-    departureDate: '2024-07-28',
-    noOfDays: 3,
-    noOfPersons: 2,
-    mobileNumber: '9876543210',
-    rate: 150,
+    guestName: '',
+    arrivalDate: '',
+    departureDate: '',
+    noOfDays: 1,
+    noOfPersons: 1,
+    mobileNumber: '',
+    rate: 0,
     roomId: '',
-    remarks: 'Requires extra towels and quiet room.',
+    remarks: '',
     includingGst: true,
   });
+
+  // Function to show notifications
+  const showNotification = (message: string, isSuccess: boolean = true) => {
+    if (isSuccess) {
+      setSuccessMessage(message);
+      setErrorMessage('');
+    } else {
+      setErrorMessage(message);
+      setSuccessMessage('');
+    }
+    
+    // Clear notifications after 5 seconds
+    setTimeout(() => {
+      setSuccessMessage('');
+      setErrorMessage('');
+    }, 5000);
+  };
 
   useEffect(() => {
     fetchAvailableRooms();
@@ -32,6 +58,31 @@ const CheckIn: React.FC = () => {
     }
   }, [formData.reservationNo]);
 
+  // Cleanup effect to clear any pending timeouts
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current);
+      }
+    };
+  }, []);
+
+  // Validate reservation on load if there's a reservation number
+  useEffect(() => {
+    if (formData.reservationNo && !isWalkIn) {
+      fetchReservationInfo(formData.reservationNo);
+    }
+  }, []);
+
+  // Clear reservation info when switching to walk-in mode
+  useEffect(() => {
+    if (isWalkIn) {
+      setReservationInfo(null);
+    } else if (formData.reservationNo) {
+      fetchReservationInfo(formData.reservationNo);
+    }
+  }, [isWalkIn]);
+
   const fetchAvailableRooms = async () => {
     try {
       const response = await roomApi.getAvailableRooms();
@@ -39,7 +90,7 @@ const CheckIn: React.FC = () => {
         setAvailableRooms(response.data.data);
       }
     } catch (error) {
-      console.error('Failed to fetch available rooms:', error);
+      showNotification('Failed to fetch available rooms. Please try again.', false);
     }
   };
 
@@ -50,7 +101,124 @@ const CheckIn: React.FC = () => {
         setAdvances(response.data.data);
       }
     } catch (error) {
-      console.error('Failed to fetch advances:', error);
+      showNotification('Failed to fetch advances. Please try again.', false);
+    }
+  };
+
+  // Function to fetch and display reservation information
+  const fetchReservationInfo = async (reservationNo: string) => {
+    if (!reservationNo) {
+      setReservationInfo(null);
+      return;
+    }
+    
+    try {
+      const response = await reservationApi.searchReservations(reservationNo);
+      if (response.data.success && response.data.data.length > 0) {
+        const reservation = response.data.data.find((r: any) => 
+          r.reservationNo === reservationNo
+        );
+        
+        if (reservation) {
+          setReservationInfo(reservation);
+        } else {
+          setReservationInfo(null);
+        }
+      } else {
+        setReservationInfo(null);
+      }
+    } catch (error) {
+      showNotification('Failed to fetch reservation info. Please try again.', false);
+      setReservationInfo(null);
+    }
+  };
+
+  // Function to auto-fill guest name based on reservation number
+  const autoFillGuestName = async (reservationNo: string) => {
+    if (!reservationNo) {
+      setFormData(prev => ({ ...prev, guestName: '' }));
+      setReservationInfo(null);
+      return;
+    }
+    
+    // Fetch reservation info
+    await fetchReservationInfo(reservationNo);
+    
+    setAutoFillLoading(true);
+    try {
+      // Search for reservations by reservation number
+      const response = await reservationApi.searchReservations(reservationNo.trim());
+      if (response.data.success && response.data.data.length > 0) {
+        // Find the exact match for the reservation number (case-insensitive)
+        const reservation = response.data.data.find((r: any) => 
+          r.reservationNo.toLowerCase() === reservationNo.trim().toLowerCase()
+        );
+        if (reservation) {
+          // Calculate number of days
+          const arrivalDate = new Date(reservation.arrivalDate);
+          const departureDate = new Date(reservation.departureDate);
+          const timeDiff = departureDate.getTime() - arrivalDate.getTime();
+          const daysDiff = Math.ceil(timeDiff / (1000 * 3600 * 24));
+          
+          setFormData(prev => ({
+            ...prev,
+            guestName: reservation.guestName,
+            arrivalDate: reservation.arrivalDate || '',
+            departureDate: reservation.departureDate || '',
+            noOfDays: daysDiff > 0 ? daysDiff : 1,
+            noOfPersons: reservation.noOfPersons || 1,
+            mobileNumber: reservation.mobileNumber || '',
+            rate: reservation.rate || 0,
+            includingGst: reservation.includingGst === 'Y'
+          }));
+        } else {
+          setFormData(prev => ({ ...prev, guestName: '' }));
+        }
+      } else {
+        setFormData(prev => ({ ...prev, guestName: '' }));
+      }
+    } catch (error) {
+      showNotification('Failed to auto-fill guest name. Please try again.', false);
+      setFormData(prev => ({ ...prev, guestName: '' }));
+    } finally {
+      setAutoFillLoading(false);
+    }
+  };
+
+  // Function to check if a reservation can accept more check-ins
+  const canCheckInToReservation = async (reservationNo: string): Promise<{ canCheckIn: boolean; message?: string }> => {
+    try {
+      const response = await reservationApi.searchReservations(reservationNo);
+      if (response.data.success && response.data.data.length > 0) {
+        const reservation = response.data.data.find((r: any) => 
+          r.reservationNo === reservationNo
+        );
+        
+        if (reservation) {
+          const roomsCheckedIn = reservation.roomsCheckedIn || 0;
+          const noOfRooms = reservation.noOfRooms || 0;
+          
+          if (roomsCheckedIn >= noOfRooms) {
+            return { 
+              canCheckIn: false, 
+              message: `All ${noOfRooms} rooms for this reservation have already been checked in. No more check-ins allowed.` 
+            };
+          }
+          
+          return { canCheckIn: true };
+        }
+      }
+      
+      return { 
+        canCheckIn: false, 
+        message: 'Reservation not found.' 
+      };
+    } catch (error) {
+      showNotification('Failed to validate reservation. Please try again.', false);
+      return { 
+        canCheckIn: false, 
+        message: 'Failed to validate reservation. Please try again.' 
+      };
     }
   };
 
@@ -61,6 +229,46 @@ const CheckIn: React.FC = () => {
       [name]: type === 'number' ? Number(value) : 
                type === 'checkbox' ? (e.target as HTMLInputElement).checked : value,
     }));
+    
+    // Auto-fill guest name and fetch reservation info when reservation number changes with debouncing
+    if (name === 'reservationNo' && !isWalkIn) {
+      // Clear previous timeout
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current);
+      }
+      
+      // Set new timeout
+      debounceRef.current = setTimeout(() => {
+        autoFillGuestName(value);
+        // Check if rooms are already assigned
+        checkRoomsAssigned(value);
+      }, 300); // 300ms debounce
+    }
+  };
+
+  // Function to check if rooms are already assigned for a reservation
+  const checkRoomsAssigned = async (reservationNo: string) => {
+    if (!reservationNo) return;
+    
+    try {
+      const response = await reservationApi.searchReservations(reservationNo);
+      if (response.data.success && response.data.data.length > 0) {
+        const reservation = response.data.data.find((r: any) => 
+          r.reservationNo === reservationNo
+        );
+        
+        if (reservation) {
+          const roomsCheckedIn = reservation.roomsCheckedIn || 0;
+          const noOfRooms = reservation.noOfRooms || 0;
+          
+          if (roomsCheckedIn >= noOfRooms) {
+            showNotification(`All ${noOfRooms} rooms for this reservation have already been assigned.`, false);
+          }
+        }
+      }
+    } catch (error) {
+      showNotification('Failed to check room assignment. Please try again.', false);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -68,6 +276,29 @@ const CheckIn: React.FC = () => {
     setLoading(true);
 
     try {
+      // Validate required fields
+      if (!formData.guestName.trim()) {
+        showNotification('Please enter a guest name or select a valid reservation number', false);
+        setLoading(false);
+        return;
+      }
+      
+      if (!formData.roomId) {
+        showNotification('Please select a room', false);
+        setLoading(false);
+        return;
+      }
+
+      // For reservation-based check-ins, validate roomsCheckedIn count
+      if (!isWalkIn && formData.reservationNo) {
+        const validation = await canCheckInToReservation(formData.reservationNo);
+        if (!validation.canCheckIn) {
+          showNotification(validation.message || 'Cannot check in to this reservation.', false);
+          setLoading(false);
+          return;
+        }
+      }
+
       const checkInData = {
         reservationNo: isWalkIn ? undefined : formData.reservationNo,
         guestName: formData.guestName,
@@ -83,11 +314,35 @@ const CheckIn: React.FC = () => {
       const response = await checkInApi.processCheckIn(checkInData);
       
       if (response.data.success) {
-        alert('Check-in processed successfully!');
+        // If this was a reservation-based check-in, update the roomsCheckedIn count
+        if (!isWalkIn && formData.reservationNo) {
+          try {
+            // Get the current reservation to update roomsCheckedIn
+            const reservationResponse = await reservationApi.searchReservations(formData.reservationNo);
+            if (reservationResponse.data.success && reservationResponse.data.data.length > 0) {
+              const reservation = reservationResponse.data.data.find((r: any) => 
+                r.reservationNo === formData.reservationNo
+              );
+              
+              if (reservation) {
+                const currentRoomsCheckedIn = reservation.roomsCheckedIn || 0;
+                // Update the reservation with incremented roomsCheckedIn count
+                await reservationApi.updateRoomsCheckedIn(
+                  formData.reservationNo, 
+                  currentRoomsCheckedIn + 1
+                );
+              }
+            }
+          } catch (error) {
+            showNotification('Failed to update reservation count, but check-in was successful.', false);
+            // Don't fail the check-in if we can't update the reservation count
+          }
+        }
+        
+        showNotification('Check-in processed successfully!');
         // Reset form
         setFormData({
           reservationNo: '',
-          folioNo: '',
           guestName: '',
           arrivalDate: '',
           departureDate: '',
@@ -99,9 +354,10 @@ const CheckIn: React.FC = () => {
           remarks: '',
           includingGst: true,
         });
+        setAdvances([]); // Clear advances as well
       }
     } catch (error: any) {
-      alert(`Error: ${error.response?.data?.message || 'Failed to process check-in'}`);
+      showNotification(`Error: ${error.response?.data?.message || 'Failed to process check-in'}`, false);
     } finally {
       setLoading(false);
     }
@@ -110,7 +366,6 @@ const CheckIn: React.FC = () => {
   const handleClear = () => {
     setFormData({
       reservationNo: '',
-      folioNo: '',
       guestName: '',
       arrivalDate: '',
       departureDate: '',
@@ -123,6 +378,17 @@ const CheckIn: React.FC = () => {
       includingGst: true,
     });
     setAdvances([]);
+    setReservationInfo(null);
+    // Clear any pending debounced calls
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current);
+      debounceRef.current = null;
+    }
+    // Reset auto-fill loading state
+    setAutoFillLoading(false);
+    // Clear notifications
+    setSuccessMessage('');
+    setErrorMessage('');
   };
 
   return (
@@ -134,6 +400,19 @@ const CheckIn: React.FC = () => {
             Process guest arrivals and update room statuses.
           </div>
         </div>
+
+        {/* Notifications */}
+        {successMessage && (
+          <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg flex items-center">
+            <CheckCircleIcon className="w-5 h-5 mr-2" />
+            {successMessage}
+          </div>
+        )}
+        {errorMessage && (
+          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+            {errorMessage}
+          </div>
+        )}
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Main Check-in Form */}
@@ -165,49 +444,73 @@ const CheckIn: React.FC = () => {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                 {/* Reservation Number */}
                 {!isWalkIn && (
-                  <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Reservation Number
-                  </label>
-                  <div className="relative">
-                    <input
-                    type="text"
-                    name="reservationNo"
-                    value={formData.reservationNo}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    />
-                  </div>
+                  <div className="md:col-span-3">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Reservation Number
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        name="reservationNo"
+                        value={formData.reservationNo}
+                        onChange={handleInputChange}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                      {autoFillLoading && (
+                        <div className="absolute inset-y-0 right-0 flex items-center pr-3">
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                        </div>
+                      )}
+                    </div>
+                    {/* Reservation Info Display */}
+                    {reservationInfo && (
+                      <div className="mt-2 p-3 bg-blue-50 rounded-lg border border-blue-100">
+                        <div className="flex justify-between items-center">
+                          <div>
+                            <p className="text-sm font-medium text-blue-800">{reservationInfo.guestName}</p>
+                            <p className="text-xs text-blue-600">
+                              Rooms: {reservationInfo.noOfRooms} | 
+                              Checked In: {reservationInfo.roomsCheckedIn || 0} | 
+                              Remaining: {reservationInfo.noOfRooms - (reservationInfo.roomsCheckedIn || 0)}
+                            </p>
+                          </div>
+                          <div>
+                            {reservationInfo.roomsCheckedIn >= reservationInfo.noOfRooms ? (
+                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                                Full
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                Available
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
-
-                {/* Folio Number */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Folio Number
-                  </label>
-                  <input
-                    type="text"
-                    name="folioNo"
-                    value={formData.folioNo}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
 
                 {/* Guest Name */}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Guest Name
                   </label>
-                  <input
-                    type="text"
-                    name="guestName"
-                    required
-                    value={formData.guestName}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
+                  <div className="relative">
+                    <input
+                      type="text"
+                      name="guestName"
+                      required
+                      value={formData.guestName}
+                      onChange={handleInputChange}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                    {autoFillLoading && (
+                      <div className="absolute inset-y-0 right-0 flex items-center pr-3">
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
 

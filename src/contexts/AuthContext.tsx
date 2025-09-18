@@ -4,7 +4,7 @@ import { authApi } from '../services/api';
 
 interface AuthContextType {
   user: User | null;
-  login: (userName: string, password: string) => Promise<boolean>;
+  login: (userName: string, password: string) => Promise<User | boolean>;
   logout: () => void;
   isLoading: boolean;
 }
@@ -42,7 +42,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setIsLoading(false);
   }, []);
 
-  const login = async (userName: string, password: string): Promise<boolean> => {
+  const login = async (userName: string, password: string): Promise<User | boolean> => {
     try {
       const response = await authApi.login(userName, password);
       
@@ -51,7 +51,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         localStorage.setItem('token', userData.token!);
         localStorage.setItem('user', JSON.stringify(userData));
         setUser(userData);
-        return true;
+        return userData;
       }
       return false;
     } catch (error) {

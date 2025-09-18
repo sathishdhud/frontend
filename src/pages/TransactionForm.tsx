@@ -1,40 +1,84 @@
 import React, { useState, useEffect } from 'react';
 import Layout from '../components/Layout/Layout';
-import { roomApi, transactionApi } from '../services/api';
-import { Room } from '../types/api';
+import { roomApi, transactionApi, masterDataApi } from '../services/api';
+import { Room, AccountHead, Transaction } from '../types/api';
 
+// Define FormState interface
 interface FormState {
     roomId: string;
-    accHead: string;
+    accHeadId: string;
     amount: string;
     narration: string;
+    voucherNo: string;
 }
 
 const initialFormState: FormState = {
     roomId: '',
-    accHead: '',
+    accHeadId: '',
     amount: '',
     narration: '',
+    voucherNo: '',
 };
 
 const TransactionForm: React.FC = () => {
     const [rooms, setRooms] = useState<Room[]>([]);
+    const [accountHeads, setAccountHeads] = useState<AccountHead[]>([]);
     const [folioNumber, setFolioNumber] = useState('');
     const [guestName, setGuestName] = useState('');
     const [form, setForm] = useState<FormState>(initialFormState);
     const [loading, setLoading] = useState(false);
+    const [transactions, setTransactions] = useState<Transaction[]>([]);
+    const [transactionsLoading, setTransactionsLoading] = useState(false);
 
     useEffect(() => {
-        const fetchRooms = async () => {
+        const fetchData = async () => {
             try {
-                const res = await roomApi.getRooms();
-                if (res.data.success) setRooms(res.data.data);
+                const [roomsRes, accountHeadsRes] = await Promise.all([
+                    roomApi.getRooms(),
+                    masterDataApi.getAccountHeads()
+                ]);
+                
+                if (roomsRes.data.success) setRooms(roomsRes.data.data);
+                if (accountHeadsRes.data.success) setAccountHeads(accountHeadsRes.data.data);
             } catch (error) {
                 // Optionally handle error
             }
         };
-        fetchRooms();
+        fetchData();
     }, []);
+
+    // Fetch transactions when folio number changes
+    useEffect(() => {
+        const fetchTransactions = async () => {
+            if (!folioNumber) {
+                setTransactions([]);
+                return;
+            }
+            
+            setTransactionsLoading(true);
+            try {
+                const res = await transactionApi.getTransactionsByFolio(folioNumber);
+                if (res.data.success) {
+                    // Map account head names to transactions
+                    const transactionsWithNames = res.data.data.map((transaction: any) => {
+                        const accountHead = accountHeads.find(ah => ah.accountHeadId === transaction.accHeadId);
+                        return {
+                            ...transaction,
+                            accHeadName: accountHead ? accountHead.accountName : transaction.accHeadName || 'Unknown'
+                        };
+                    });
+                    setTransactions(transactionsWithNames);
+                }
+            } catch (error) {
+                console.error('Failed to fetch transactions:', error);
+                setTransactions([]);
+            } finally {
+                setTransactionsLoading(false);
+            }
+        };
+        
+        fetchTransactions();
+    }, [folioNumber, accountHeads]);
 
     const handleChange = (
         e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>
@@ -53,7 +97,7 @@ const TransactionForm: React.FC = () => {
         e.preventDefault();
         setLoading(true);
 
-        if (!folioNumber || !guestName || !form.accHead || !form.amount) {
+        if (!folioNumber || !guestName || !form.accHeadId || !form.amount) {
             alert('Please fill all required fields.');
             setLoading(false);
             return;
@@ -63,9 +107,10 @@ const TransactionForm: React.FC = () => {
             await transactionApi.createInhouseTransaction({
                 folioNo: folioNumber,
                 guestName,
-                accHeadId: form.accHead,
+                accHeadId: form.accHeadId,
                 amount: Number(form.amount),
                 narration: form.narration,
+                voucherNo: form.voucherNo || undefined, // Only send if provided
             });
             alert('Transaction saved successfully!');
             handleClear();
@@ -124,14 +169,20 @@ const TransactionForm: React.FC = () => {
                         </div>
                         <div>
                             <label className="block text-sm font-medium mb-2">Acc Head *</label>
-                            <input
-                                type="text"
-                                name="accHead"
-                                value={form.accHead}
+                            <select
+                                name="accHeadId"
+                                value={form.accHeadId}
                                 onChange={handleChange}
                                 className="w-full border rounded-lg px-3 py-2"
-                                placeholder="Select Account Head"
-                            />
+                                required
+                            >
+                                <option value="">Select Account Head</option>
+                                {accountHeads.map(accountHead => (
+                                    <option key={accountHead.accountHeadId} value={accountHead.accountHeadId}>
+                                        {accountHead.accountName}
+                                    </option>
+                                ))}
+                            </select>
                         </div>
                         <div>
                             <label className="block text-sm font-medium mb-2">Amount</label>
@@ -141,9 +192,21 @@ const TransactionForm: React.FC = () => {
                                 value={form.amount}
                                 onChange={handleChange}
                                 className="w-full border rounded-lg px-3 py-2"
+                                required
                             />
                         </div>
-                        <div className="md:col-span-2">
+                        <div>
+                            <label className="block text-sm font-medium mb-2">Voucher Number</label>
+                            <input
+                                type="text"
+                                name="voucherNo"
+                                value={form.voucherNo}
+                                onChange={handleChange}
+                                className="w-full border rounded-lg px-3 py-2"
+                                placeholder="Enter voucher number (optional)"
+                            />
+                        </div>
+                        <div className="md:col-span-3">
                             <label className="block text-sm font-medium mb-2">Narration (Optional)</label>
                             <textarea
                                 name="narration"
@@ -173,7 +236,54 @@ const TransactionForm: React.FC = () => {
                 </div>
                 <div className="bg-white rounded-xl border border-gray-200 p-8">
                     <h3 className="text-lg font-semibold mb-4">Recent Transactions for Folio</h3>
-                    <div className="text-gray-500">No recent transactions for this folio.</div>
+                    {transactionsLoading ? (
+                        <div className="text-gray-500">Loading transactions...</div>
+                    ) : transactions.length > 0 ? (
+                        <div className="overflow-x-auto">
+                            <table className="min-w-full divide-y divide-gray-200">
+                                <thead className="bg-gray-50">
+                                    <tr>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Account Head</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Narration</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Transaction ID</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Bill No</th>
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Voucher No</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="bg-white divide-y divide-gray-200">
+                                    {transactions.map((transaction, index) => (
+                                        <tr key={index} className="hover:bg-gray-50">
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                                {transaction.date ? new Date(transaction.date).toLocaleDateString() : 'N/A'}
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                                {transaction.accHeadName}
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                                ₹{transaction.amount?.toFixed(2) || '0.00'}
+                                            </td>
+                                            <td className="px-6 py-4 text-sm text-gray-900">
+                                                {transaction.narration || '-'}
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                                {transaction.transactionId || '-'}
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                                {transaction.billNo || '-'}
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                                {transaction.voucherNo || '-'}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    ) : (
+                        <div className="text-gray-500">No recent transactions for this folio.</div>
+                    )}
                 </div>
             </div>
         </Layout>

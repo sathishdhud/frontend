@@ -15,7 +15,12 @@ const Login: React.FC = () => {
 
   useEffect(() => {
     if (user) {
-      navigate('/dashboard');
+      // Redirect housekeeping users to housekeeping section
+      if (user.userTypeRole === 'HOUSEKEEPING' || user.userTypeId === 'HOUSEKEEPING') {
+        navigate('/housekeeping');
+      } else {
+        navigate('/dashboard');
+      }
     }
   }, [user, navigate]);
 
@@ -24,11 +29,16 @@ const Login: React.FC = () => {
     setIsLoading(true);
     setError('');
 
-    const success = await login(userName, password);
+    const result = await login(userName, password);
     
-    if (success) {
-      navigate('/dashboard');
-    } else {
+    if (result && typeof result !== 'boolean') {
+      // Redirect housekeeping users to housekeeping section
+      if (result.userTypeRole === 'HOUSEKEEPING' || result.userTypeId === 'HOUSEKEEPING') {
+        navigate('/housekeeping');
+      } else {
+        navigate('/dashboard');
+      }
+    } else if (!result) {
       setError('Invalid username or password');
     }
     
