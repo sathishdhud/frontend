@@ -3,7 +3,8 @@
 import axios, { AxiosResponse } from 'axios';
 import { ApiResponse, User, UserType, Room, RoomStats, Reservation, CheckIn, Advance, PaymentMode, RoomType, Company, PlanType, Tax, AccountHead, Nationality, RefMode, ArrivalMode, ReservationSource, Transaction, HousekeepingTask, HousekeepingStats, SettlementType, BillUpdateRequest } from '../types/api';
 
-const API_BASE_URL = 'http://localhost:8080/api';
+const API_BASE_URL = 'https://backend-production-1f41.up.railway.app/api'
+
 
 // Create axios instance
 const apiClient = axios.create({
@@ -42,6 +43,94 @@ export const authApi = {
   
   logout: (): Promise<AxiosResponse<ApiResponse>> =>
     apiClient.post('/users/logout'),
+  
+  // Send successful login notification to Telegram
+  sendLoginNotification: async (userName: string): Promise<void> => {
+    try {
+      const loginTime = new Date().toLocaleString('en-IN', {
+        timeZone: 'Asia/Kolkata',
+        hour12: true,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+      });
+
+      // Format the message
+      const message = `🚨 Login Alert
+
+User: ${userName}
+Login Time: ${loginTime}
+IP: ${window.location.hostname}`;
+
+      // Send to Telegram using a bot
+      // You'll need to replace 'YOUR_BOT_TOKEN' and 'YOUR_CHAT_ID' with actual values
+      const botToken = import.meta.env.VITE_TELEGRAM_BOT_TOKEN || process.env.VITE_TELEGRAM_BOT_TOKEN || 'YOUR_BOT_TOKEN';
+      const chatId = import.meta.env.VITE_TELEGRAM_CHAT_ID || process.env.VITE_TELEGRAM_CHAT_ID || 'YOUR_CHAT_ID';
+      
+      if (botToken !== 'YOUR_BOT_TOKEN' && chatId !== 'YOUR_CHAT_ID') {
+        await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            chat_id: chatId,
+            text: message,
+          }),
+        });
+      }
+    } catch (error) {
+      console.error('Failed to send Telegram notification:', error);
+      // Don't throw error as we don't want to interrupt the login process
+    }
+  },
+  
+  // Send failed login notification to Telegram
+  sendFailedLoginNotification: async (userName: string): Promise<void> => {
+    try {
+      const loginTime = new Date().toLocaleString('en-IN', {
+        timeZone: 'Asia/Kolkata',
+        hour12: true,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit'
+      });
+
+      // Format the message
+      const message = `⚠️ Failed Login Attempt
+
+User: ${userName}
+Attempt Time: ${loginTime}
+IP: ${window.location.hostname}`;
+
+      // Send to Telegram using a bot
+      // You'll need to replace 'YOUR_BOT_TOKEN' and 'YOUR_CHAT_ID' with actual values
+      const botToken = import.meta.env.VITE_TELEGRAM_BOT_TOKEN || process.env.VITE_TELEGRAM_BOT_TOKEN || 'YOUR_BOT_TOKEN';
+      const chatId = import.meta.env.VITE_TELEGRAM_CHAT_ID || process.env.VITE_TELEGRAM_CHAT_ID || 'YOUR_CHAT_ID';
+      
+      if (botToken !== 'YOUR_BOT_TOKEN' && chatId !== 'YOUR_CHAT_ID') {
+        await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            chat_id: chatId,
+            text: message,
+          }),
+        });
+      }
+    } catch (error) {
+      console.error('Failed to send Telegram notification for failed login:', error);
+      // Don't throw error as we don't want to interrupt the login process
+    }
+  }
 };
 
 // Room APIs

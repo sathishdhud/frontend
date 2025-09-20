@@ -51,11 +51,20 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         localStorage.setItem('token', userData.token!);
         localStorage.setItem('user', JSON.stringify(userData));
         setUser(userData);
+        
+        // Send successful login notification to Telegram
+        authApi.sendLoginNotification(userName);
+        
         return userData;
+      } else {
+        // Send failed login notification to Telegram
+        authApi.sendFailedLoginNotification(userName);
+        return false;
       }
-      return false;
     } catch (error) {
       console.error('Login failed:', error);
+      // Send failed login notification to Telegram
+      authApi.sendFailedLoginNotification(userName);
       return false;
     }
   };

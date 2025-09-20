@@ -742,36 +742,329 @@ const BillGeneration: React.FC = () => {
 
   // Function to download bill as PDF
   const downloadBillAsPDF = async () => {
-    if (!billContentRef.current) {
-      alert('Bill content not found.');
+    if (!billData) {
+      alert('No bill data available.');
       return;
     }
 
     try {
-      const canvas = await html2canvas(billContentRef.current, {
-        scale: 2,
-        useCORS: true,
-        logging: false
+      // Create a new jsPDF instance with A4 dimensions
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4'
       });
       
-      const imgData = canvas.toDataURL('image/png');
-      const pdf = new jsPDF('p', 'mm', 'a4');
-      const imgWidth = 210; // A4 width in mm
-      const pageHeight = 297; // A4 height in mm
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
-      let heightLeft = imgHeight;
-      let position = 0;
-
-      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-      heightLeft -= pageHeight;
-
-      while (heightLeft >= 0) {
-        position = heightLeft - imgHeight;
-        pdf.addPage();
-        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-        heightLeft -= pageHeight;
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const margin = 20;
+      let currentY = margin; // Starting Y position
+      
+      // Set font styles
+      pdf.setFont('helvetica');
+      
+      // Add hotel header with modern styling
+      pdf.setFontSize(28);
+      pdf.setTextColor(40, 40, 40); // Dark gray color
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('HOTEL STAR', pageWidth / 2, currentY, { align: 'center' });
+      currentY += 12;
+      
+      // Add hotel address
+      pdf.setFontSize(11);
+      pdf.setFont('helvetica', 'normal');
+      pdf.setTextColor(100, 100, 100); // Medium gray
+      pdf.text('123 Hotel Street, City, State 12345', pageWidth / 2, currentY, { align: 'center' });
+      currentY += 6;
+      pdf.text('Phone: (123) 456-7890 | Email: info@hotelstar.com', pageWidth / 2, currentY, { align: 'center' });
+      currentY += 15;
+      
+      // Add decorative separator
+      pdf.setDrawColor(200, 200, 200);
+      pdf.setLineWidth(0.5);
+      pdf.line(margin, currentY, pageWidth - margin, currentY);
+      currentY += 12;
+      
+      // Add bill title with modern styling
+      pdf.setFontSize(22);
+      pdf.setTextColor(40, 40, 40);
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('BILL INVOICE', pageWidth / 2, currentY, { align: 'center' });
+      currentY += 15;
+      
+      // Add date and bill info in a modern card-like format
+      pdf.setFontSize(11);
+      const today = new Date().toLocaleDateString();
+      
+      // Bill information card
+      const cardX = pageWidth - 90;
+      const cardY = currentY;
+      const cardWidth = 70;
+      const cardHeight = 35;
+      
+      // Draw card with rounded corners effect
+      pdf.setFillColor(245, 245, 245);
+      pdf.rect(cardX, cardY, cardWidth, cardHeight, 'F');
+      pdf.setDrawColor(220, 220, 220);
+      pdf.rect(cardX, cardY, cardWidth, cardHeight);
+      
+      // Card content
+      pdf.setFont('helvetica', 'bold');
+      pdf.setTextColor(60, 60, 60);
+      pdf.text('Bill No:', cardX + 5, cardY + 10);
+      pdf.text('Date:', cardX + 5, cardY + 20);
+      pdf.setFont('helvetica', 'normal');
+      pdf.text(billData.billNo || 'N/A', cardX + 25, cardY + 10);
+      pdf.text(today, cardX + 25, cardY + 20);
+      
+      // Guest information in a two-column layout
+      const leftColX = margin;
+      const rightColX = pageWidth / 2;
+      
+      pdf.setFont('helvetica', 'bold');
+      pdf.setTextColor(60, 60, 60);
+      pdf.text('Guest Name:', leftColX, currentY + 10);
+      pdf.text('Room No:', leftColX, currentY + 20);
+      pdf.text('Check-in:', leftColX, currentY + 30);
+      pdf.text('Check-out:', leftColX, currentY + 40);
+      
+      pdf.text('Folio No:', rightColX - 10, currentY + 10);
+      pdf.text('Status:', rightColX - 10, currentY + 20);
+      pdf.text('Settlement:', rightColX - 10, currentY + 30);
+      
+      pdf.setFont('helvetica', 'normal');
+      pdf.setTextColor(40, 40, 40);
+      pdf.text(billData.guestName || 'N/A', leftColX + 30, currentY + 10);
+      pdf.text(billData.roomNo || 'N/A', leftColX + 30, currentY + 20);
+      pdf.text(billData.checkInDate || 'N/A', leftColX + 30, currentY + 30);
+      pdf.text(billData.checkOutDate || 'N/A', leftColX + 30, currentY + 40);
+      
+      pdf.text(billData.folioNo || 'N/A', rightColX + 30, currentY + 10);
+      pdf.text(billData.settlementStatus || 'Pending', rightColX + 30, currentY + 20);
+      pdf.text(billData.settlementDate || 'N/A', rightColX + 30, currentY + 30);
+      
+      currentY += 55;
+      
+      // Add items table header with modern styling
+      pdf.setFontSize(16);
+      pdf.setTextColor(40, 40, 40);
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('Charges Summary', margin, currentY);
+      currentY += 12;
+      
+      // Table with modern styling
+      const tableStartX = margin;
+      const tableWidth = pageWidth - (margin * 2);
+      const rowHeight = 10;
+      
+      // Table headers with background
+      pdf.setFillColor(60, 60, 60);
+      pdf.rect(tableStartX, currentY, tableWidth, rowHeight, 'F');
+      
+      pdf.setFontSize(12);
+      pdf.setFont('helvetica', 'bold');
+      pdf.setTextColor(255, 255, 255);
+      pdf.text('Description', tableStartX + 5, currentY + 7);
+      pdf.text('Amount (₹)', tableStartX + tableWidth - 5, currentY + 7, { align: 'right' });
+      
+      currentY += rowHeight;
+      
+      // Table content with alternating row colors
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(11);
+      pdf.setTextColor(40, 40, 40);
+      
+      // Add room charges
+      pdf.setFillColor(245, 245, 245);
+      pdf.rect(tableStartX, currentY, tableWidth, rowHeight, 'F');
+      pdf.text('Room Charges', tableStartX + 5, currentY + 7);
+      pdf.text(`₹${billData.roomCharges?.toFixed(2) || '0.00'}`, tableStartX + tableWidth - 5, currentY + 7, { align: 'right' });
+      currentY += rowHeight;
+      
+      // Add additional charges
+      if (billTransactions.length > 0) {
+        billTransactions.forEach((transaction: any, index: number) => {
+          if (transaction.accHeadId !== 'ROOM_CHARGES') {
+            const itemName = transaction.accHeadName || transaction.accHeadId || 'Item';
+            
+            // Alternating row colors
+            if (index % 2 === 0) {
+              pdf.setFillColor(250, 250, 250);
+              pdf.rect(tableStartX, currentY, tableWidth, rowHeight, 'F');
+            }
+            
+            pdf.text(itemName, tableStartX + 5, currentY + 7);
+            pdf.text(`₹${transaction.amount?.toFixed(2) || '0.00'}`, tableStartX + tableWidth - 5, currentY + 7, { align: 'right' });
+            currentY += rowHeight;
+            
+            // Check if we need a new page
+            if (currentY > pageHeight - 80) {
+              pdf.addPage();
+              currentY = margin;
+            }
+          }
+        });
       }
-
+      
+      // Add separator line
+      pdf.setDrawColor(200, 200, 200);
+      pdf.setLineWidth(0.2);
+      pdf.line(tableStartX, currentY, tableStartX + tableWidth, currentY);
+      currentY += 8;
+      
+      // Calculate totals
+      const subtotal = billData.subtotal || 0;
+      const advanceAmount = billAdvances.reduce((sum, advance) => sum + (advance.amount || 0), 0);
+      const balanceAmount = Math.max(0, subtotal - advanceAmount);
+      const paidAmount = billData.paidAmount || 0;
+      
+      // Add summary in a card-like format
+      const summaryCardX = pageWidth - 100;
+      const summaryCardY = currentY;
+      const summaryCardWidth = 80;
+      const summaryCardHeight = 40;
+      
+      pdf.setFillColor(245, 245, 245);
+      pdf.rect(summaryCardX, summaryCardY, summaryCardWidth, summaryCardHeight, 'F');
+      pdf.setDrawColor(220, 220, 220);
+      pdf.rect(summaryCardX, summaryCardY, summaryCardWidth, summaryCardHeight);
+      
+      pdf.setFont('helvetica', 'bold');
+      pdf.setTextColor(60, 60, 60);
+      pdf.text('Subtotal:', summaryCardX + 5, summaryCardY + 12);
+      pdf.text('Advance:', summaryCardX + 5, summaryCardY + 22);
+      pdf.text('Balance:', summaryCardX + 5, summaryCardY + 32);
+      
+      pdf.setFont('helvetica', 'normal');
+      pdf.text(`₹${subtotal.toFixed(2)}`, summaryCardX + 40, summaryCardY + 12);
+      pdf.text(`₹${advanceAmount.toFixed(2)}`, summaryCardX + 40, summaryCardY + 22);
+      pdf.text(`₹${balanceAmount.toFixed(2)}`, summaryCardX + 40, summaryCardY + 32);
+      
+      // Total amount due with emphasis
+      currentY += summaryCardHeight + 10;
+      
+      pdf.setFontSize(14);
+      pdf.setFont('helvetica', 'bold');
+      pdf.setTextColor(40, 40, 40);
+      pdf.text('Total Amount Due:', pageWidth - 100, currentY);
+      pdf.text(`₹${balanceAmount.toFixed(2)}`, pageWidth - 20, currentY, { align: 'right' });
+      currentY += 20;
+      
+      // Add advance payments table if any
+      if (billAdvances.length > 0) {
+        currentY += 5;
+        pdf.setFontSize(16);
+        pdf.setTextColor(40, 40, 40);
+        pdf.setFont('helvetica', 'bold');
+        pdf.text('Advance Payments', margin, currentY);
+        currentY += 12;
+        
+        // Advance payments table with modern styling
+        const advanceTableStartX = margin;
+        const advanceTableWidth = pageWidth - (margin * 2);
+        
+        // Table headers with background
+        pdf.setFillColor(60, 60, 60);
+        pdf.rect(advanceTableStartX, currentY, advanceTableWidth, rowHeight, 'F');
+        
+        pdf.setFontSize(12);
+        pdf.setFont('helvetica', 'bold');
+        pdf.setTextColor(255, 255, 255);
+        pdf.text('Date', advanceTableStartX + 5, currentY + 7);
+        pdf.text('Receipt No', advanceTableStartX + 40, currentY + 7);
+        pdf.text('Payment Mode', advanceTableStartX + 80, currentY + 7);
+        pdf.text('Amount (₹)', advanceTableStartX + advanceTableWidth - 5, currentY + 7, { align: 'right' });
+        
+        currentY += rowHeight;
+        
+        // Advance payments content with alternating row colors
+        pdf.setFont('helvetica', 'normal');
+        pdf.setFontSize(11);
+        pdf.setTextColor(40, 40, 40);
+        
+        billAdvances.forEach((advance: any, index: number) => {
+          const date = advance.date ? new Date(advance.date).toLocaleDateString() : 'N/A';
+          
+          // Alternating row colors
+          if (index % 2 === 0) {
+            pdf.setFillColor(250, 250, 250);
+            pdf.rect(advanceTableStartX, currentY, advanceTableWidth, rowHeight, 'F');
+          }
+          
+          pdf.text(date, advanceTableStartX + 5, currentY + 7);
+          pdf.text(advance.receiptNo || 'N/A', advanceTableStartX + 40, currentY + 7);
+          pdf.text(advance.modeOfPaymentName || advance.modeOfPaymentId || 'N/A', advanceTableStartX + 80, currentY + 7);
+          pdf.text(`₹${advance.amount?.toFixed(2) || '0.00'}`, advanceTableStartX + advanceTableWidth - 5, currentY + 7, { align: 'right' });
+          currentY += rowHeight;
+          
+          // Check if we need a new page
+          if (currentY > pageHeight - 80) {
+            pdf.addPage();
+            currentY = margin;
+          }
+        });
+      }
+      
+      // Add payment information if available
+      if (billData.paidAmount > 0) {
+        currentY += 10;
+        pdf.setFontSize(16);
+        pdf.setTextColor(40, 40, 40);
+        pdf.setFont('helvetica', 'bold');
+        pdf.text('Payment Information', margin, currentY);
+        currentY += 12;
+        
+        // Payment information card
+        const paymentCardX = margin;
+        const paymentCardY = currentY;
+        const paymentCardWidth = pageWidth - (margin * 2);
+        const paymentCardHeight = 30;
+        
+        pdf.setFillColor(245, 245, 245);
+        pdf.rect(paymentCardX, paymentCardY, paymentCardWidth, paymentCardHeight, 'F');
+        pdf.setDrawColor(220, 220, 220);
+        pdf.rect(paymentCardX, paymentCardY, paymentCardWidth, paymentCardHeight);
+        
+        pdf.setFontSize(12);
+        pdf.setFont('helvetica', 'bold');
+        pdf.setTextColor(60, 60, 60);
+        pdf.text('Payment Status:', paymentCardX + 5, paymentCardY + 12);
+        pdf.text('Amount Paid:', paymentCardX + 5, paymentCardY + 22);
+        
+        pdf.setFont('helvetica', 'normal');
+        pdf.text(billData.settlementStatus || 'N/A', paymentCardX + 45, paymentCardY + 12);
+        pdf.text(`₹${paidAmount.toFixed(2)}`, paymentCardX + 45, paymentCardY + 22);
+        
+        currentY += paymentCardHeight + 10;
+      }
+      
+      // Add footer with modern styling
+      currentY = pageHeight - 40;
+      
+      // Add decorative separator
+      pdf.setDrawColor(200, 200, 200);
+      pdf.setLineWidth(0.5);
+      pdf.line(margin, currentY, pageWidth - margin, currentY);
+      currentY += 10;
+      
+      // Add thank you message
+      pdf.setFontSize(16);
+      pdf.setFont('helvetica', 'bold');
+      pdf.setTextColor(40, 40, 40);
+      pdf.text('Thank You for Your Business!', pageWidth / 2, currentY, { align: 'center' });
+      currentY += 8;
+      
+      pdf.setFontSize(10);
+      pdf.setFont('helvetica', 'italic');
+      pdf.setTextColor(100, 100, 100);
+      pdf.text('This is a computer generated invoice and does not require a signature', pageWidth / 2, currentY, { align: 'center' });
+      
+      // Add bill generation note
+      currentY += 8;
+      pdf.setFont('helvetica', 'normal');
+      pdf.text(`Bill Generated: ${billData.billNo || 'N/A'}`, pageWidth / 2, currentY, { align: 'center' });
+      
+      // Save the PDF
       const fileName = `Bill_${billData.billNo || 'unknown'}_${new Date().toISOString().slice(0, 10)}.pdf`;
       pdf.save(fileName);
     } catch (error) {
@@ -1584,7 +1877,7 @@ const RelatedBillRow: React.FC<{ bill: any }> = ({ bill }) => {
   // Use fallback only if roomCharges is not explicitly set
   const finalRoomCharges = roomCharges || fallbackRoomCharges;
   
-  // Calculate additional charges from transactions (excluding room charges)
+  // Calculate additional charges from transactions (excluding room charge
   const billTransactions: any[] = bill.transactions || [];
   const totalTransactions = billTransactions
     .filter((transaction: any) => transaction.accHeadId !== 'ROOM_CHARGES')
