@@ -47,40 +47,43 @@ export const authApi = {
   // Send successful login notification to Telegram
   sendLoginNotification: async (userName: string): Promise<void> => {
     try {
-      const loginTime = new Date().toLocaleString('en-IN', {
-        timeZone: 'Asia/Kolkata',
-        hour12: true,
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit'
-      });
+      // Only send notification in production environment
+      if (import.meta.env.PROD || process.env.NODE_ENV === 'production') {
+        const loginTime = new Date().toLocaleString('en-IN', {
+          timeZone: 'Asia/Kolkata',
+          hour12: true,
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit'
+        });
 
-      // Format the message
-      const message = `🚨 Login Alert
+        // Format the message
+        const message = `🚨 Login Alert
 
 User: ${userName}
 Login Time: ${loginTime}
 IP: ${window.location.hostname}`;
 
-      // Send to Telegram using a bot
-      // You'll need to replace 'YOUR_BOT_TOKEN' and 'YOUR_CHAT_ID' with actual values
-      const botToken = import.meta.env.VITE_TELEGRAM_BOT_TOKEN || process.env.VITE_TELEGRAM_BOT_TOKEN || 'YOUR_BOT_TOKEN';
-      const chatId = import.meta.env.VITE_TELEGRAM_CHAT_ID || process.env.VITE_TELEGRAM_CHAT_ID || 'YOUR_CHAT_ID';
-      
-      if (botToken !== 'YOUR_BOT_TOKEN' && chatId !== 'YOUR_CHAT_ID') {
-        await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            chat_id: chatId,
-            text: message,
-          }),
-        });
+        // Send to Telegram using a bot
+        // You'll need to replace 'YOUR_BOT_TOKEN' and 'YOUR_CHAT_ID' with actual values
+        const botToken = import.meta.env.VITE_TELEGRAM_BOT_TOKEN || process.env.VITE_TELEGRAM_BOT_TOKEN || 'YOUR_BOT_TOKEN';
+        const chatId = import.meta.env.VITE_TELEGRAM_CHAT_ID || process.env.VITE_TELEGRAM_CHAT_ID || 'YOUR_CHAT_ID';
+        
+        if (botToken !== 'YOUR_BOT_TOKEN' && chatId !== 'YOUR_CHAT_ID') {
+          await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              chat_id: chatId,
+              text: message,
+            }),
+          });
+        }
       }
     } catch (error) {
       console.error('Failed to send Telegram notification:', error);
@@ -91,40 +94,43 @@ IP: ${window.location.hostname}`;
   // Send failed login notification to Telegram
   sendFailedLoginNotification: async (userName: string): Promise<void> => {
     try {
-      const loginTime = new Date().toLocaleString('en-IN', {
-        timeZone: 'Asia/Kolkata',
-        hour12: true,
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit'
-      });
+      // Only send notification in production environment
+      if (import.meta.env.PROD || process.env.NODE_ENV === 'production') {
+        const loginTime = new Date().toLocaleString('en-IN', {
+          timeZone: 'Asia/Kolkata',
+          hour12: true,
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit'
+        });
 
-      // Format the message
-      const message = `⚠️ Failed Login Attempt
+        // Format the message
+        const message = `⚠️ Failed Login Attempt
 
 User: ${userName}
 Attempt Time: ${loginTime}
 IP: ${window.location.hostname}`;
 
-      // Send to Telegram using a bot
-      // You'll need to replace 'YOUR_BOT_TOKEN' and 'YOUR_CHAT_ID' with actual values
-      const botToken = import.meta.env.VITE_TELEGRAM_BOT_TOKEN || process.env.VITE_TELEGRAM_BOT_TOKEN || 'YOUR_BOT_TOKEN';
-      const chatId = import.meta.env.VITE_TELEGRAM_CHAT_ID || process.env.VITE_TELEGRAM_CHAT_ID || 'YOUR_CHAT_ID';
-      
-      if (botToken !== 'YOUR_BOT_TOKEN' && chatId !== 'YOUR_CHAT_ID') {
-        await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            chat_id: chatId,
-            text: message,
-          }),
-        });
+        // Send to Telegram using a bot
+        // You'll need to replace 'YOUR_BOT_TOKEN' and 'YOUR_CHAT_ID' with actual values
+        const botToken = import.meta.env.VITE_TELEGRAM_BOT_TOKEN || process.env.VITE_TELEGRAM_BOT_TOKEN || 'YOUR_BOT_TOKEN';
+        const chatId = import.meta.env.VITE_TELEGRAM_CHAT_ID || process.env.VITE_TELEGRAM_CHAT_ID || 'YOUR_CHAT_ID';
+        
+        if (botToken !== 'YOUR_BOT_TOKEN' && chatId !== 'YOUR_CHAT_ID') {
+          await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              chat_id: chatId,
+              text: message,
+            }),
+          });
+        }
       }
     } catch (error) {
       console.error('Failed to send Telegram notification for failed login:', error);
