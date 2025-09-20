@@ -1,17 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Advance, PaymentMode, Reservation, CheckIn } from '../types/api';
-import { advanceApi, masterDataApi, reservationApi, checkInApi } from '../services/api';
+import { Advance, PaymentMode, Reservation, CheckIn, AccountHead, SettlementType, Transaction } from '../types/api';
+import { advanceApi, masterDataApi, reservationApi, checkInApi, transactionApi, billApi } from '../services/api';
 import Layout from '../components/Layout/Layout';
 import { BillPayment } from '../types/api';
-import { billApi } from '../services/api';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { CheckCircleIcon } from '@heroicons/react/24/outline';
 
 const Cashier: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'record' | 'edit' | 'view'>('record');
+  const [activeTab, setActiveTab] = useState<'record' | 'edit' | 'view' | 'reprint' | 'expenses' | 'settlement' | 'sales' | 'split'>('record');
   const [loading, setLoading] = useState(false);
   const [paymentModes, setPaymentModes] = useState<PaymentMode[]>([]);
+  const [accountHeads, setAccountHeads] = useState<AccountHead[]>([]);
+  const [settlementTypes, setSettlementTypes] = useState<SettlementType[]>([]);
   const [contextOptions, setContextOptions] = useState<any[]>([]);
   const [formData, setFormData] = useState({
     receiptNumber: `AUTO-GEN-${Math.floor(Math.random() * 9000 + 1000)}`,
@@ -25,6 +26,50 @@ const Cashier: React.FC = () => {
     creditCardCompany: '',
     cardNumber: '',
     onlineCompanyName: '',
+  });
+  
+  // Reprint Bill state
+  const [reprintData, setReprintData] = useState({
+    billNo: '',
+    folioNo: '',
+  });
+  
+  // Expenses Entry state
+  const [expensesData, setExpensesData] = useState({
+    folioNo: '',
+    guestName: '',
+    accHeadId: '',
+    amount: 0,
+    narration: '',
+    voucherNo: '',
+  });
+  
+  // Settlement Entry state
+  const [settlementData, setSettlementData] = useState({
+    folioNo: '',
+    guestName: '',
+    settlementTypeId: '',
+    amount: 0,
+    remarks: '',
+  });
+  
+  // Sales Receipts state
+  const [salesData, setSalesData] = useState({
+    receiptNo: `AUTO-GEN-${Math.floor(Math.random() * 9000 + 1000)}`,
+    date: new Date().toISOString().split('T')[0],
+    accHeadId: '',
+    amount: 0,
+    narration: '',
+    modeOfPaymentId: '',
+  });
+  
+  // Split Bill state
+  const [splitBillData, setSplitBillData] = useState({
+    folioNo: '',
+    guestName: '',
+    originalAmount: 0,
+    splitAmount: 0,
+    remainingAmount: 0,
   });
   
   // Summary state
@@ -93,6 +138,8 @@ const Cashier: React.FC = () => {
 
   useEffect(() => {
     fetchPaymentModes();
+    fetchAccountHeads();
+    fetchSettlementTypes();
     fetchSummary();
     
     // Cleanup function to clear timeout on unmount
@@ -111,6 +158,28 @@ const Cashier: React.FC = () => {
       }
     } catch (error) {
       showNotification('Failed to fetch payment modes. Please try again.', false);
+    }
+  };
+
+  const fetchAccountHeads = async () => {
+    try {
+      const response = await masterDataApi.getAccountHeads();
+      if (response.data.success) {
+        setAccountHeads(response.data.data);
+      }
+    } catch (error) {
+      showNotification('Failed to fetch account heads. Please try again.', false);
+    }
+  };
+
+  const fetchSettlementTypes = async () => {
+    try {
+      const response = await masterDataApi.getSettlementTypes();
+      if (response.data.success) {
+        setSettlementTypes(response.data.data);
+      }
+    } catch (error) {
+      showNotification('Failed to fetch settlement types. Please try again.', false);
     }
   };
 
@@ -289,6 +358,46 @@ const Cashier: React.FC = () => {
     if (name === 'contextValue') {
       autoFillGuestName(value);
     }
+  };
+
+  const handleReprintInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    setReprintData(prev => ({
+      ...prev,
+      [name]: value,
+    }));
+  };
+
+  const handleExpensesInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    const { name, value, type } = e.target;
+    setExpensesData(prev => ({
+      ...prev,
+      [name]: type === 'number' ? Number(value) : value,
+    }));
+  };
+
+  const handleSettlementInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    const { name, value, type } = e.target;
+    setSettlementData(prev => ({
+      ...prev,
+      [name]: type === 'number' ? Number(value) : value,
+    }));
+  };
+
+  const handleSalesInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    const { name, value, type } = e.target;
+    setSalesData(prev => ({
+      ...prev,
+      [name]: type === 'number' ? Number(value) : value,
+    }));
+  };
+
+  const handleSplitBillInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    const { name, value, type } = e.target;
+    setSplitBillData(prev => ({
+      ...prev,
+      [name]: type === 'number' ? Number(value) : value,
+    }));
   };
 
   // Function to auto-fill guest name based on context value
@@ -832,7 +941,7 @@ const Cashier: React.FC = () => {
   };
 
   // Handle tab change
-  const handleTabChange = (tab: 'record' | 'edit' | 'view') => {
+  const handleTabChange = (tab: 'record' | 'edit' | 'view' | 'reprint' | 'expenses' | 'settlement' | 'sales' | 'split') => {
     setActiveTab(tab);
     if (tab === 'view') {
       fetchAdvances();
@@ -859,10 +968,10 @@ const Cashier: React.FC = () => {
             <button
               type="button"
               onClick={() => handleTabChange('record')}
-              className={`px-6 py-2 font-medium transition-colors focus:outline-none ${
+              className={`px-4 py-2 text-sm font-medium transition-colors focus:outline-none ${
                 activeTab === 'record'
                   ? 'bg-indigo-600 text-white'
-                  : 'bg-gray-100 text-gray-700'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
               }`}
             >
               Record Advance
@@ -870,10 +979,10 @@ const Cashier: React.FC = () => {
             <button
               type="button"
               onClick={() => handleTabChange('edit')}
-              className={`px-6 py-2 font-medium transition-colors focus:outline-none ${
+              className={`px-4 py-2 text-sm font-medium transition-colors focus:outline-none ${
                 activeTab === 'edit'
                   ? 'bg-indigo-600 text-white'
-                  : 'bg-gray-100 text-gray-700'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
               }`}
             >
               {editingAdvance ? 'Edit Advance' : 'Edit Advance'}
@@ -881,13 +990,68 @@ const Cashier: React.FC = () => {
             <button
               type="button"
               onClick={() => handleTabChange('view')}
-              className={`px-6 py-2 font-medium transition-colors focus:outline-none ${
+              className={`px-4 py-2 text-sm font-medium transition-colors focus:outline-none ${
                 activeTab === 'view'
                   ? 'bg-indigo-600 text-white'
-                  : 'bg-gray-100 text-gray-700'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
               }`}
             >
               View Advances
+            </button>
+            <button
+              type="button"
+              onClick={() => handleTabChange('reprint')}
+              className={`px-4 py-2 text-sm font-medium transition-colors focus:outline-none ${
+                activeTab === 'reprint'
+                  ? 'bg-indigo-600 text-white'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              Reprint Bill
+            </button>
+            <button
+              type="button"
+              onClick={() => handleTabChange('expenses')}
+              className={`px-4 py-2 text-sm font-medium transition-colors focus:outline-none ${
+                activeTab === 'expenses'
+                  ? 'bg-indigo-600 text-white'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              Expenses Entry
+            </button>
+            <button
+              type="button"
+              onClick={() => handleTabChange('settlement')}
+              className={`px-4 py-2 text-sm font-medium transition-colors focus:outline-none ${
+                activeTab === 'settlement'
+                  ? 'bg-indigo-600 text-white'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              Settlement Entry
+            </button>
+            <button
+              type="button"
+              onClick={() => handleTabChange('sales')}
+              className={`px-4 py-2 text-sm font-medium transition-colors focus:outline-none ${
+                activeTab === 'sales'
+                  ? 'bg-indigo-600 text-white'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              Sales Receipts
+            </button>
+            <button
+              type="button"
+              onClick={() => handleTabChange('split')}
+              className={`px-4 py-2 text-sm font-medium transition-colors focus:outline-none ${
+                activeTab === 'split'
+                  ? 'bg-indigo-600 text-white'
+                  : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+              }`}
+            >
+              Split Bill
             </button>
           </div>
         </div>
@@ -1019,6 +1183,867 @@ const Cashier: React.FC = () => {
                         onChange={handleInputChange}
                         min="0"
                         step="0.01"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        required
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Details */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Details
+                      </label>
+                      <textarea
+                        name="details"
+                        value={formData.details}
+                        onChange={handleInputChange}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                    {/* Narration */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Narration
+                      </label>
+                      <textarea
+                        name="narration"
+                        value={formData.narration}
+                        onChange={handleInputChange}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {/* Credit Card Company */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Credit Card Company
+                      </label>
+                      <input
+                        type="text"
+                        name="creditCardCompany"
+                        value={formData.creditCardCompany}
+                        onChange={handleInputChange}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                    {/* Card Number */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Card Number
+                      </label>
+                      <input
+                        type="text"
+                        name="cardNumber"
+                        value={formData.cardNumber}
+                        onChange={handleInputChange}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                    {/* Online Company Name */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Online Company Name
+                      </label>
+                      <input
+                        type="text"
+                        name="onlineCompanyName"
+                        value={formData.onlineCompanyName}
+                        onChange={handleInputChange}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex justify-end">
+                    <button
+                      type="submit"
+                      className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                    >
+                      {loading ? 'Processing...' : 'Record Advance'}
+                    </button>
+                  </div>
+                </form>
+              </>
+            )}
+            {activeTab === 'edit' && (
+              <>
+                <div className="p-6 border-b border-gray-200">
+                  <h2 className="text-xl font-semibold text-gray-900">Edit Advance</h2>
+                </div>
+                <form onSubmit={handleUpdateAdvance} className="p-6 space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {/* Receipt Number */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Receipt Number
+                      </label>
+                      <input
+                        type="text"
+                        name="receiptNumber"
+                        value={editForm.receiptNumber}
+                        disabled
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-500"
+                      />
+                    </div>
+                    {/* Context Dropdown (single field) */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Folio / Bill / Reservation *
+                      </label>
+                      <input
+                        type="text"
+                        name="contextValue"
+                        value={editForm.contextValue}
+                        onChange={handleEditInputChange}
+                        placeholder="e.g., R12345, F67890, or B54321"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                        required
+                      />
+                      <p className="mt-1 text-xs text-gray-500">Prefix: R (Reservation), F (Folio), B (Bill)</p>
+                    </div>
+                    {/* Date */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Date *
+                      </label>
+                      <input
+                        type="date"
+                        name="date"
+                        value={editForm.date}
+                        onChange={handleEditInputChange}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        required
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Guest Name */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Guest Name
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          name="guestName"
+                          value={editForm.guestName}
+                          onChange={handleEditInputChange}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                        />
+                        {autoFillLoading && (
+                          <div className="absolute inset-y-0 right-0 flex items-center pr-3">
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-indigo-600"></div>
+                          </div>
+                        )}
+                      </div>
+                      {!autoFillLoading && attemptedAutoFill && contextError && (
+                        <p className="mt-1 text-xs text-red-500">
+                          {contextError}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Mode of Payment */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Mode of Payment *
+                      </label>
+                      <select
+                        name="modeOfPaymentId"
+                        value={editForm.modeOfPaymentId}
+                        onChange={handleEditInputChange}
+                        required
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      >
+                        <option value="">Select mode</option>
+                        {paymentModes.map(mode => (
+                          <option key={mode.id} value={mode.id}>
+                            {mode.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    {/* Amount */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Amount *
+                      </label>
+                      <input
+                        type="number"
+                        name="amount"
+                        value={editForm.amount}
+                        onChange={handleEditInputChange}
+                        min="0"
+                        step="0.01"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        required
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Details */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Details
+                      </label>
+                      <textarea
+                        name="details"
+                        value={editForm.details}
+                        onChange={handleEditInputChange}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                    {/* Narration */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Narration
+                      </label>
+                      <textarea
+                        name="narration"
+                        value={editForm.narration}
+                        onChange={handleEditInputChange}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {/* Credit Card Company */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Credit Card Company
+                      </label>
+                      <input
+                        type="text"
+                        name="creditCardCompany"
+                        value={editForm.creditCardCompany}
+                        onChange={handleEditInputChange}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                    {/* Card Number */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Card Number
+                      </label>
+                      <input
+                        type="text"
+                        name="cardNumber"
+                        value={editForm.cardNumber}
+                        onChange={handleEditInputChange}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                    {/* Online Company Name */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Online Company Name
+                      </label>
+                      <input
+                        type="text"
+                        name="onlineCompanyName"
+                        value={editForm.onlineCompanyName}
+                        onChange={handleEditInputChange}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex justify-end">
+                    <button
+                      type="submit"
+                      className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                    >
+                      {loading ? 'Processing...' : 'Update Advance'}
+                    </button>
+                  </div>
+                </form>
+              </>
+            )}
+            {activeTab === 'view' && (
+              <>
+                <div className="p-6 border-b border-gray-200">
+                  <h2 className="text-xl font-semibold text-gray-900">View Advances</h2>
+                </div>
+                <div className="p-6">
+                  {advancesLoading ? (
+                    <div className="flex justify-center items-center h-48">
+                      <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-600"></div>
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto">
+                      <table className="w-full border border-gray-200">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">Receipt No</th>
+                            <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">Date</th>
+                            <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">Guest Name</th>
+                            <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">Mode of Payment</th>
+                            <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">Amount</th>
+                            <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {advances.length > 0 ? (
+                            advances.map(advance => (
+                              <tr key={advance.id} className="border-b border-gray-200">
+                                <td className="px-4 py-2 text-sm text-gray-700">{advance.receiptNo}</td>
+                                <td className="px-4 py-2 text-sm text-gray-700">{advance.date?.split('T')[0]}</td>
+                                <td className="px-4 py-2 text-sm text-gray-700">{advance.guestName}</td>
+                                <td className="px-4 py-2 text-sm text-gray-700">{advance.modeOfPaymentId}</td>
+                                <td className="px-4 py-2 text-sm text-gray-700">{advance.amount}</td>
+                                <td className="px-4 py-2 text-sm text-gray-700">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleEditAdvance(advance)}
+                                    className="px-2 py-1 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                                  >
+                                    Edit
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeleteAdvance(advance.id)}
+                                    className="ml-2 px-2 py-1 bg-red-600 text-white rounded-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
+                                  >
+                                    Delete
+                                  </button>
+                                </td>
+                              </tr>
+                            ))
+                          ) : (
+                            <tr>
+                              <td className="px-4 py-2 text-sm text-gray-700" colSpan={6}>
+                                No advances found.
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+            {activeTab === 'reprint' && (
+              <>
+                <div className="p-6 border-b border-gray-200">
+                  <h2 className="text-xl font-semibold text-gray-900">Reprint Bill</h2>
+                </div>
+                <form onSubmit={handleReprintBill} className="p-6 space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Bill Number */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Bill Number
+                      </label>
+                      <input
+                        type="text"
+                        name="billNo"
+                        value={reprintData.billNo}
+                        onChange={handleReprintInputChange}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                        required
+                      />
+                    </div>
+                    {/* Folio Number */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Folio Number
+                      </label>
+                      <input
+                        type="text"
+                        name="folioNo"
+                        value={reprintData.folioNo}
+                        onChange={handleReprintInputChange}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                        required
+                      />
+                    </div>
+                  </div>
+                  <div className="flex justify-end">
+                    <button
+                      type="submit"
+                      className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                    >
+                      {loading ? 'Processing...' : 'Reprint Bill'}
+                    </button>
+                  </div>
+                </form>
+              </>
+            )}
+            {activeTab === 'expenses' && (
+              <>
+                <div className="p-6 border-b border-gray-200">
+                  <h2 className="text-xl font-semibold text-gray-900">Expenses Entry</h2>
+                </div>
+                <form onSubmit={handleExpensesEntry} className="p-6 space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Folio Number */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Folio Number
+                      </label>
+                      <input
+                        type="text"
+                        name="folioNo"
+                        value={expensesData.folioNo}
+                        onChange={handleExpensesInputChange}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                        required
+                      />
+                    </div>
+                    {/* Guest Name */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Guest Name
+                      </label>
+                      <input
+                        type="text"
+                        name="guestName"
+                        value={expensesData.guestName}
+                        onChange={handleExpensesInputChange}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                        required
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Account Head */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Account Head
+                      </label>
+                      <select
+                        name="accHeadId"
+                        value={expensesData.accHeadId}
+                        onChange={handleExpensesInputChange}
+                        required
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      >
+                        <option value="">Select account head</option>
+                        {accountHeads.map(head => (
+                          <option key={head.id} value={head.id}>
+                            {head.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    {/* Amount */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Amount
+                      </label>
+                      <input
+                        type="number"
+                        name="amount"
+                        value={expensesData.amount}
+                        onChange={handleExpensesInputChange}
+                        min="0"
+                        step="0.01"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        required
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Narration */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Narration
+                      </label>
+                      <textarea
+                        name="narration"
+                        value={expensesData.narration}
+                        onChange={handleExpensesInputChange}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                    {/* Voucher Number */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Voucher Number
+                      </label>
+                      <input
+                        type="text"
+                        name="voucherNo"
+                        value={expensesData.voucherNo}
+                        onChange={handleExpensesInputChange}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex justify-end">
+                    <button
+                      type="submit"
+                      className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                    >
+                      {loading ? 'Processing...' : 'Record Expenses'}
+                    </button>
+                  </div>
+                </form>
+              </>
+            )}
+            {activeTab === 'settlement' && (
+              <>
+                <div className="p-6 border-b border-gray-200">
+                  <h2 className="text-xl font-semibold text-gray-900">Settlement Entry</h2>
+                </div>
+                <form onSubmit={handleSettlementEntry} className="p-6 space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Folio Number */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Folio Number
+                      </label>
+                      <input
+                        type="text"
+                        name="folioNo"
+                        value={settlementData.folioNo}
+                        onChange={handleSettlementInputChange}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                        required
+                      />
+                    </div>
+                    {/* Guest Name */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Guest Name
+                      </label>
+                      <input
+                        type="text"
+                        name="guestName"
+                        value={settlementData.guestName}
+                        onChange={handleSettlementInputChange}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                        required
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Settlement Type */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Settlement Type
+                      </label>
+                      <select
+                        name="settlementTypeId"
+                        value={settlementData.settlementTypeId}
+                        onChange={handleSettlementInputChange}
+                        required
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      >
+                        <option value="">Select settlement type</option>
+                        {settlementTypes.map(type => (
+                          <option key={type.id} value={type.id}>
+                            {type.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    {/* Amount */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Amount
+                      </label>
+                      <input
+                        type="number"
+                        name="amount"
+                        value={settlementData.amount}
+                        onChange={handleSettlementInputChange}
+                        min="0"
+                        step="0.01"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        required
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Remarks */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Remarks
+                      </label>
+                      <textarea
+                        name="remarks"
+                        value={settlementData.remarks}
+                        onChange={handleSettlementInputChange}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex justify-end">
+                    <button
+                      type="submit"
+                      className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                    >
+                      {loading ? 'Processing...' : 'Record Settlement'}
+                    </button>
+                  </div>
+                </form>
+              </>
+            )}
+            {activeTab === 'sales' && (
+              <>
+                <div className="p-6 border-b border-gray-200">
+                  <h2 className="text-xl font-semibold text-gray-900">Sales Receipts</h2>
+                </div>
+                <form onSubmit={handleSalesReceipts} className="p-6 space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {/* Receipt Number */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Receipt Number
+                      </label>
+                      <input
+                        type="text"
+                        name="receiptNo"
+                        value={salesData.receiptNo}
+                        disabled
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-500"
+                      />
+                    </div>
+                    {/* Date */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Date
+                      </label>
+                      <input
+                        type="date"
+                        name="date"
+                        value={salesData.date}
+                        onChange={handleSalesInputChange}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        required
+                      />
+                    </div>
+                    {/* Account Head */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Account Head
+                      </label>
+                      <select
+                        name="accHeadId"
+                        value={salesData.accHeadId}
+                        onChange={handleSalesInputChange}
+                        required
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      >
+                        <option value="">Select account head</option>
+                        {accountHeads.map(head => (
+                          <option key={head.id} value={head.id}>
+                            {head.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Amount */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Amount
+                      </label>
+                      <input
+                        type="number"
+                        name="amount"
+                        value={salesData.amount}
+                        onChange={handleSalesInputChange}
+                        min="0"
+                        step="0.01"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        required
+                      />
+                    </div>
+                    {/* Narration */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Narration
+                      </label>
+                      <textarea
+                        name="narration"
+                        value={salesData.narration}
+                        onChange={handleSalesInputChange}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Mode of Payment */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Mode of Payment
+                      </label>
+                      <select
+                        name="modeOfPaymentId"
+                        value={salesData.modeOfPaymentId}
+                        onChange={handleSalesInputChange}
+                        required
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      >
+                        <option value="">Select mode</option>
+                        {paymentModes.map(mode => (
+                          <option key={mode.id} value={mode.id}>
+                            {mode.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                  <div className="flex justify-end">
+                    <button
+                      type="submit"
+                      className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                    >
+                      {loading ? 'Processing...' : 'Record Sales'}
+                    </button>
+                  </div>
+                </form>
+              </>
+            )}
+            {activeTab === 'split' && (
+              <>
+                <div className="p-6 border-b border-gray-200">
+                  <h2 className="text-xl font-semibold text-gray-900">Split Bill</h2>
+                </div>
+                <form onSubmit={handleSplitBill} className="p-6 space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Folio Number */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Folio Number
+                      </label>
+                      <input
+                        type="text"
+                        name="folioNo"
+                        value={splitBillData.folioNo}
+                        onChange={handleSplitBillInputChange}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                        required
+                      />
+                    </div>
+                    {/* Guest Name */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Guest Name
+                      </label>
+                      <input
+                        type="text"
+                        name="guestName"
+                        value={splitBillData.guestName}
+                        onChange={handleSplitBillInputChange}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                        required
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Original Amount */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Original Amount
+                      </label>
+                      <input
+                        type="number"
+                        name="originalAmount"
+                        value={splitBillData.originalAmount}
+                        onChange={handleSplitBillInputChange}
+                        min="0"
+                        step="0.01"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        required
+                      />
+                    </div>
+                    {/* Split Amount */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Split Amount
+                      </label>
+                      <input
+                        type="number"
+                        name="splitAmount"
+                        value={splitBillData.splitAmount}
+                        onChange={handleSplitBillInputChange}
+                        min="0"
+                        step="0.01"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        required
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Remaining Amount */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Remaining Amount
+                      </label>
+                      <input
+                        type="number"
+                        name="remainingAmount"
+                        value={splitBillData.remainingAmount}
+                        onChange={handleSplitBillInputChange}
+                        min="0"
+                        step="0.01"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        required
+                      />
+                    </div>
+                  </div>
+                  <div className="flex justify-end">
+                    <button
+                      type="submit"
+                      className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                    >
+                      {loading ? 'Processing...' : 'Split Bill'}
+                    </button>
+                  </div>
+                </form>
+              </>
+            )}
+          </div>
+          {/* Summary */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200">
+            <div className="p-6 border-b border-gray-200">
+              <h2 className="text-xl font-semibold text-gray-900">Summary</h2>
+            </div>
+            <div className="p-6">
+              {summaryLoading ? (
+                <div className="flex justify-center items-center h-48">
+                  <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-600"></div>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="flex justify-between">
+                    <div className="text-gray-700">Total Today</div>
+                    <div className="font-medium text-gray-900">${summary.totalToday.toFixed(2)}</div>
+                  </div>
+                  <div className="flex justify-between">
+                    <div className="text-gray-700">Transaction Count</div>
+                    <div className="font-medium text-gray-900">{summary.transactionCount}</div>
+                  </div>
+                  <div className="flex justify-between">
+                    <div className="text-gray-700">Average Amount</div>
+                    <div className="font-medium text-gray-900">${summary.avgAmount.toFixed(2)}</div>
+                  </div>
+                  <div className="flex justify-between">
+                    <div className="text-gray-700">Last Week Total</div>
+                    <div className="font-medium text-gray-900">${summary.lastWeekTotal.toFixed(2)}</div>
+                  </div>
+                  <div className="mt-4">
+                    <ResponsiveContainer width="100%" height={200}>
+                      <BarChart data={summary.chartData}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis dataKey="name" />
+                        <YAxis />
+                        <Tooltip />
+                        <Bar dataKey="amount" fill="#8884d8" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
                         required
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         placeholder="0.00"

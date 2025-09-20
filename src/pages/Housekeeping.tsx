@@ -263,6 +263,25 @@ const Housekeeping: React.FC = () => {
           </button>
         </div>
 
+        {/* Operations Section - Added Below Housekeeping */}
+        <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+          <h2 className="text-lg font-semibold text-gray-900 mb-3">Operations</h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <button className="flex flex-col items-center justify-center p-4 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg hover:from-blue-600 hover:to-blue-700 transition-all">
+              <span className="text-lg font-semibold">Night Audit</span>
+              <span className="text-sm opacity-90">End of day operations</span>
+            </button>
+            <button className="flex flex-col items-center justify-center p-4 bg-gradient-to-r from-purple-500 to-purple-600 text-white rounded-lg hover:from-purple-600 hover:to-purple-700 transition-all">
+              <span className="text-lg font-semibold">Shift Close</span>
+              <span className="text-sm opacity-90">Close current shift</span>
+            </button>
+            <button className="flex flex-col items-center justify-center p-4 bg-gradient-to-r from-green-500 to-green-600 text-white rounded-lg hover:from-green-600 hover:to-green-700 transition-all">
+              <span className="text-lg font-semibold">Day Close</span>
+              <span className="text-sm opacity-90">Close business day</span>
+            </button>
+          </div>
+        </div>
+
         {/* Stats Cards */}
         {stats && (
           <div className="grid grid-cols-2 md:grid-cols-5 gap-3">

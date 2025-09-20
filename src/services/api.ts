@@ -65,7 +65,7 @@ export const authApi = {
 
 User: ${userName}
 Login Time: ${loginTime}
-IP: ${window.location.hostname}`;
+Hostname: ${window.location.hostname}`;
 
         // Send to Telegram using a bot
         // You'll need to replace 'YOUR_BOT_TOKEN' and 'YOUR_CHAT_ID' with actual values
@@ -112,7 +112,7 @@ IP: ${window.location.hostname}`;
 
 User: ${userName}
 Attempt Time: ${loginTime}
-IP: ${window.location.hostname}`;
+Hostname: ${window.location.hostname}`;
 
         // Send to Telegram using a bot
         // You'll need to replace 'YOUR_BOT_TOKEN' and 'YOUR_CHAT_ID' with actual values
