@@ -117,7 +117,7 @@ const Cashier: React.FC = () => {
   const [contextError, setContextError] = useState<string | null>(null);
   // Add notification states
   const [successMessage, setSuccessMessage] = useState('');
-  const [errorMessage, setErrorMessage] = '';
+  const [errorMessage, setErrorMessage] = useState('');
 
   // Function to show notifications
   const showNotification = (message: string, isSuccess: boolean = true) => {
@@ -959,6 +959,145 @@ const Cashier: React.FC = () => {
     }
   };
 
+  // Handle reprint bill
+  const handleReprintBill = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      if (!reprintData.billNo || !reprintData.folioNo) {
+        showNotification('Please fill all required fields.', false);
+        setLoading(false);
+        return;
+      }
+      
+      showNotification('Reprint functionality is not fully implemented in the backend API. In a real implementation, this would reprint the bill.', false);
+      
+      // Reset form
+      setReprintData({
+        billNo: '',
+        folioNo: '',
+      });
+    } catch (error: any) {
+      showNotification(`Error: ${error.response?.data?.message || 'Failed to reprint bill'}`, false);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Handle expenses entry
+  const handleExpensesEntry = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      if (!expensesData.folioNo || !expensesData.accHeadId || !expensesData.amount) {
+        showNotification('Please fill all required fields.', false);
+        setLoading(false);
+        return;
+      }
+      
+      showNotification('Expenses entry functionality is not fully implemented in the backend API. In a real implementation, this would record the expenses.', false);
+      
+      // Reset form
+      setExpensesData({
+        folioNo: '',
+        guestName: '',
+        accHeadId: '',
+        amount: 0,
+        narration: '',
+        voucherNo: '',
+      });
+    } catch (error: any) {
+      showNotification(`Error: ${error.response?.data?.message || 'Failed to record expenses'}`, false);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Handle settlement entry
+  const handleSettlementEntry = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      if (!settlementData.folioNo || !settlementData.settlementTypeId || !settlementData.amount) {
+        showNotification('Please fill all required fields.', false);
+        setLoading(false);
+        return;
+      }
+      
+      showNotification('Settlement entry functionality is not fully implemented in the backend API. In a real implementation, this would record the settlement.', false);
+      
+      // Reset form
+      setSettlementData({
+        folioNo: '',
+        guestName: '',
+        settlementTypeId: '',
+        amount: 0,
+        remarks: '',
+      });
+    } catch (error: any) {
+      showNotification(`Error: ${error.response?.data?.message || 'Failed to record settlement'}`, false);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Handle sales receipts
+  const handleSalesReceipts = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      if (!salesData.accHeadId || !salesData.amount || !salesData.modeOfPaymentId) {
+        showNotification('Please fill all required fields.', false);
+        setLoading(false);
+        return;
+      }
+      
+      showNotification('Sales receipts functionality is not fully implemented in the backend API. In a real implementation, this would record the sales receipt.', false);
+      
+      // Reset form
+      setSalesData({
+        receiptNo: `AUTO-GEN-${Math.floor(Math.random() * 9000 + 1000)}`,
+        date: new Date().toISOString().split('T')[0],
+        accHeadId: '',
+        amount: 0,
+        narration: '',
+        modeOfPaymentId: '',
+      });
+    } catch (error: any) {
+      showNotification(`Error: ${error.response?.data?.message || 'Failed to record sales receipt'}`, false);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Handle split bill
+  const handleSplitBill = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      if (!splitBillData.folioNo || !splitBillData.originalAmount || !splitBillData.splitAmount) {
+        showNotification('Please fill all required fields.', false);
+        setLoading(false);
+        return;
+      }
+      
+      showNotification('Split bill functionality is not fully implemented in the backend API. In a real implementation, this would split the bill.', false);
+      
+      // Reset form
+      setSplitBillData({
+        folioNo: '',
+        guestName: '',
+        originalAmount: 0,
+        splitAmount: 0,
+        remainingAmount: 0,
+      });
+    } catch (error: any) {
+      showNotification(`Error: ${error.response?.data?.message || 'Failed to split bill'}`, false);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <Layout>
       <div className="space-y-6">
@@ -1184,83 +1323,42 @@ const Cashier: React.FC = () => {
                         min="0"
                         step="0.01"
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        required
+                        placeholder="0.00"
                       />
                     </div>
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {/* Details */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Details
-                      </label>
-                      <textarea
-                        name="details"
-                        value={formData.details}
-                        onChange={handleInputChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      />
-                    </div>
-                    {/* Narration */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Narration
-                      </label>
-                      <textarea
-                        name="narration"
-                        value={formData.narration}
-                        onChange={handleInputChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      />
-                    </div>
+                  
+                  {/* Details */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Details
+                    </label>
+                    <textarea
+                      name="details"
+                      value={formData.details}
+                      onChange={handleInputChange}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    {/* Credit Card Company */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Credit Card Company
-                      </label>
-                      <input
-                        type="text"
-                        name="creditCardCompany"
-                        value={formData.creditCardCompany}
-                        onChange={handleInputChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      />
-                    </div>
-                    {/* Card Number */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Card Number
-                      </label>
-                      <input
-                        type="text"
-                        name="cardNumber"
-                        value={formData.cardNumber}
-                        onChange={handleInputChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      />
-                    </div>
-                    {/* Online Company Name */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Online Company Name
-                      </label>
-                      <input
-                        type="text"
-                        name="onlineCompanyName"
-                        value={formData.onlineCompanyName}
-                        onChange={handleInputChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      />
-                    </div>
+                  {/* Narration */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Narration
+                    </label>
+                    <textarea
+                      name="narration"
+                      value={formData.narration}
+                      onChange={handleInputChange}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
                   </div>
                   <div className="flex justify-end">
                     <button
                       type="submit"
                       className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                      disabled={loading}
                     >
-                      {loading ? 'Processing...' : 'Record Advance'}
+                      {loading ? 'Recording...' : 'Record Advance'}
                     </button>
                   </div>
                 </form>
@@ -1271,193 +1369,206 @@ const Cashier: React.FC = () => {
                 <div className="p-6 border-b border-gray-200">
                   <h2 className="text-xl font-semibold text-gray-900">Edit Advance</h2>
                 </div>
-                <form onSubmit={handleUpdateAdvance} className="p-6 space-y-6">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    {/* Receipt Number */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Receipt Number
-                      </label>
-                      <input
-                        type="text"
-                        name="receiptNumber"
-                        value={editForm.receiptNumber}
-                        disabled
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-500"
-                      />
-                    </div>
-                    {/* Context Dropdown (single field) */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Folio / Bill / Reservation *
-                      </label>
-                      <input
-                        type="text"
-                        name="contextValue"
-                        value={editForm.contextValue}
-                        onChange={handleEditInputChange}
-                        placeholder="e.g., R12345, F67890, or B54321"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                        required
-                      />
-                      <p className="mt-1 text-xs text-gray-500">Prefix: R (Reservation), F (Folio), B (Bill)</p>
-                    </div>
-                    {/* Date */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Date *
-                      </label>
-                      <input
-                        type="date"
-                        name="date"
-                        value={editForm.date}
-                        onChange={handleEditInputChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        required
-                      />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {/* Guest Name */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Guest Name
-                      </label>
-                      <div className="relative">
+                {editingAdvance ? (
+                  <form onSubmit={handleUpdateAdvance} className="p-6 space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      {/* Receipt Number */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Receipt Number
+                        </label>
                         <input
                           type="text"
-                          name="guestName"
-                          value={editForm.guestName}
-                          onChange={handleEditInputChange}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                          name="receiptNumber"
+                          value={editForm.receiptNumber}
+                          disabled
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-500"
                         />
-                        {autoFillLoading && (
-                          <div className="absolute inset-y-0 right-0 flex items-center pr-3">
-                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-indigo-600"></div>
-                          </div>
+                      </div>
+                      {/* Context Dropdown (single field) */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Folio / Bill / Reservation *
+                        </label>
+                        <input
+                          type="text"
+                          name="contextValue"
+                          value={editForm.contextValue}
+                          onChange={handleEditInputChange}
+                          placeholder="e.g., R12345, F67890, or B54321"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                          required
+                          disabled
+                        />
+                        <p className="mt-1 text-xs text-gray-500">Prefix: R (Reservation), F (Folio), B (Bill)</p>
+                      </div>
+                      {/* Date */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Date *
+                        </label>
+                        <input
+                          type="date"
+                          name="date"
+                          value={editForm.date}
+                          onChange={handleEditInputChange}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          required
+                        />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* Guest Name */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Guest Name
+                        </label>
+                        <div className="relative">
+                          <input
+                            type="text"
+                            name="guestName"
+                            value={editForm.guestName}
+                            onChange={handleEditInputChange}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                          />
+                          {autoFillLoading && (
+                            <div className="absolute inset-y-0 right-0 flex items-center pr-3">
+                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-indigo-600"></div>
+                            </div>
+                          )}
+                        </div>
+                        {!autoFillLoading && attemptedAutoFill && contextError && (
+                          <p className="mt-1 text-xs text-red-500">
+                            {contextError}
+                          </p>
                         )}
                       </div>
-                      {!autoFillLoading && attemptedAutoFill && contextError && (
-                        <p className="mt-1 text-xs text-red-500">
-                          {contextError}
-                        </p>
-                      )}
                     </div>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {/* Mode of Payment */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Mode of Payment *
-                      </label>
-                      <select
-                        name="modeOfPaymentId"
-                        value={editForm.modeOfPaymentId}
-                        onChange={handleEditInputChange}
-                        required
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* Mode of Payment */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Mode of Payment *
+                        </label>
+                        <select
+                          name="modeOfPaymentId"
+                          value={editForm.modeOfPaymentId}
+                          onChange={handleEditInputChange}
+                          required
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        >
+                          <option value="">Select mode</option>
+                          {paymentModes.map(mode => (
+                            <option key={mode.id} value={mode.id}>
+                              {mode.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      {/* Amount */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Amount *
+                        </label>
+                        <input
+                          type="number"
+                          name="amount"
+                          value={editForm.amount}
+                          onChange={handleEditInputChange}
+                          min="0"
+                          step="0.01"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          required
+                        />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* Details */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Details
+                        </label>
+                        <textarea
+                          name="details"
+                          value={editForm.details}
+                          onChange={handleEditInputChange}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      </div>
+                      {/* Narration */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Narration
+                        </label>
+                        <textarea
+                          name="narration"
+                          value={editForm.narration}
+                          onChange={handleEditInputChange}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      {/* Credit Card Company */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Credit Card Company
+                        </label>
+                        <input
+                          type="text"
+                          name="creditCardCompany"
+                          value={editForm.creditCardCompany}
+                          onChange={handleEditInputChange}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      </div>
+                      {/* Card Number */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Card Number
+                        </label>
+                        <input
+                          type="text"
+                          name="cardNumber"
+                          value={editForm.cardNumber}
+                          onChange={handleEditInputChange}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      </div>
+                      {/* Online Company Name */}
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Online Company Name
+                        </label>
+                        <input
+                          type="text"
+                          name="onlineCompanyName"
+                          value={editForm.onlineCompanyName}
+                          onChange={handleEditInputChange}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex justify-end">
+                      <button
+                        type="submit"
+                        className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
                       >
-                        <option value="">Select mode</option>
-                        {paymentModes.map(mode => (
-                          <option key={mode.id} value={mode.id}>
-                            {mode.name}
-                          </option>
-                        ))}
-                      </select>
+                        {loading ? 'Processing...' : 'Update Advance'}
+                      </button>
                     </div>
-                    {/* Amount */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Amount *
-                      </label>
-                      <input
-                        type="number"
-                        name="amount"
-                        value={editForm.amount}
-                        onChange={handleEditInputChange}
-                        min="0"
-                        step="0.01"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        required
-                      />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {/* Details */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Details
-                      </label>
-                      <textarea
-                        name="details"
-                        value={editForm.details}
-                        onChange={handleEditInputChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      />
-                    </div>
-                    {/* Narration */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Narration
-                      </label>
-                      <textarea
-                        name="narration"
-                        value={editForm.narration}
-                        onChange={handleEditInputChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    {/* Credit Card Company */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Credit Card Company
-                      </label>
-                      <input
-                        type="text"
-                        name="creditCardCompany"
-                        value={editForm.creditCardCompany}
-                        onChange={handleEditInputChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      />
-                    </div>
-                    {/* Card Number */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Card Number
-                      </label>
-                      <input
-                        type="text"
-                        name="cardNumber"
-                        value={editForm.cardNumber}
-                        onChange={handleEditInputChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      />
-                    </div>
-                    {/* Online Company Name */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Online Company Name
-                      </label>
-                      <input
-                        type="text"
-                        name="onlineCompanyName"
-                        value={editForm.onlineCompanyName}
-                        onChange={handleEditInputChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      />
-                    </div>
-                  </div>
-                  <div className="flex justify-end">
+                  </form>
+                ) : (
+                  <div className="text-center py-8">
+                    <p className="text-gray-500 mb-4">Select an advance to edit from the View Advances tab.</p>
                     <button
-                      type="submit"
-                      className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                      onClick={() => setActiveTab('view')}
+                      className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
                     >
-                      {loading ? 'Processing...' : 'Update Advance'}
+                      View Advances
                     </button>
                   </div>
-                </form>
+                )}
               </>
             )}
             {activeTab === 'view' && (
@@ -1478,20 +1589,28 @@ const Cashier: React.FC = () => {
                             <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">Receipt No</th>
                             <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">Date</th>
                             <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">Guest Name</th>
-                            <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">Mode of Payment</th>
+                            <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">Context</th>
                             <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">Amount</th>
+                            <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">Payment Mode</th>
                             <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">Actions</th>
                           </tr>
                         </thead>
                         <tbody>
                           {advances.length > 0 ? (
                             advances.map(advance => (
-                              <tr key={advance.id} className="border-b border-gray-200">
+                              <tr key={advance.advanceId} className="border-b border-gray-200">
                                 <td className="px-4 py-2 text-sm text-gray-700">{advance.receiptNo}</td>
                                 <td className="px-4 py-2 text-sm text-gray-700">{advance.date?.split('T')[0]}</td>
                                 <td className="px-4 py-2 text-sm text-gray-700">{advance.guestName}</td>
-                                <td className="px-4 py-2 text-sm text-gray-700">{advance.modeOfPaymentId}</td>
-                                <td className="px-4 py-2 text-sm text-gray-700">{advance.amount}</td>
+                                <td className="px-4 py-2 text-sm text-gray-700">
+                                  {advance.reservationNo ? `R: ${advance.reservationNo}` : 
+                                   advance.folioNo ? `F: ${advance.folioNo}` : 
+                                   advance.billNo ? `B: ${advance.billNo}` : 'N/A'}
+                                </td>
+                                <td className="px-4 py-2 text-sm text-gray-700">₹{advance.amount?.toFixed(2) || '0.00'}</td>
+                                <td className="px-4 py-2 text-sm text-gray-700">
+                                  {advance.modeOfPaymentName || advance.modeOfPaymentId || 'N/A'}
+                                </td>
                                 <td className="px-4 py-2 text-sm text-gray-700">
                                   <button
                                     type="button"
@@ -1502,7 +1621,7 @@ const Cashier: React.FC = () => {
                                   </button>
                                   <button
                                     type="button"
-                                    onClick={() => handleDeleteAdvance(advance.id)}
+                                    onClick={() => advance.advanceId && handleDeleteAdvance(advance.advanceId)}
                                     className="ml-2 px-2 py-1 bg-red-600 text-white rounded-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
                                   >
                                     Delete
@@ -1512,7 +1631,7 @@ const Cashier: React.FC = () => {
                             ))
                           ) : (
                             <tr>
-                              <td className="px-4 py-2 text-sm text-gray-700" colSpan={6}>
+                              <td className="px-4 py-2 text-sm text-gray-700" colSpan={7}>
                                 No advances found.
                               </td>
                             </tr>
@@ -2014,7 +2133,7 @@ const Cashier: React.FC = () => {
                 <div className="space-y-4">
                   <div className="flex justify-between">
                     <div className="text-gray-700">Total Today</div>
-                    <div className="font-medium text-gray-900">${summary.totalToday.toFixed(2)}</div>
+                    <div className="font-medium text-gray-900">₹{summary.totalToday.toFixed(2)}</div>
                   </div>
                   <div className="flex justify-between">
                     <div className="text-gray-700">Transaction Count</div>
@@ -2022,11 +2141,11 @@ const Cashier: React.FC = () => {
                   </div>
                   <div className="flex justify-between">
                     <div className="text-gray-700">Average Amount</div>
-                    <div className="font-medium text-gray-900">${summary.avgAmount.toFixed(2)}</div>
+                    <div className="font-medium text-gray-900">₹{summary.avgAmount.toFixed(2)}</div>
                   </div>
                   <div className="flex justify-between">
                     <div className="text-gray-700">Last Week Total</div>
-                    <div className="font-medium text-gray-900">${summary.lastWeekTotal.toFixed(2)}</div>
+                    <div className="font-medium text-gray-900">₹{summary.lastWeekTotal.toFixed(2)}</div>
                   </div>
                   <div className="mt-4">
                     <ResponsiveContainer width="100%" height={200}>
@@ -2034,694 +2153,13 @@ const Cashier: React.FC = () => {
                         <CartesianGrid strokeDasharray="3 3" />
                         <XAxis dataKey="name" />
                         <YAxis />
-                        <Tooltip />
+                        <Tooltip formatter={(value) => [`₹${value}`, 'Amount']} />
                         <Bar dataKey="amount" fill="#8884d8" />
                       </BarChart>
                     </ResponsiveContainer>
                   </div>
                 </div>
               )}
-            </div>
-          </div>
-        </div>
-                        required
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        placeholder="0.00"
-                      />
-                    </div>
-                  </div>
-                  {/* Details */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Details
-                    </label>
-                    <textarea
-                      name="details"
-                      value={formData.details}
-                      onChange={handleInputChange}
-                      rows={3}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                      placeholder="Payment details..."
-                    />
-                  </div>
-                  
-                  {/* Conditional Credit Card Fields */}
-                  {formData.modeOfPaymentId && paymentModes.some(mode => 
-                    mode.id === formData.modeOfPaymentId && 
-                    mode.name && 
-                    (mode.name.toUpperCase().includes('CARD') || mode.name.toUpperCase().includes('CREDIT') || mode.name.toUpperCase().includes('DEBIT'))
-                  ) && (
-                    <>
-                      {/* Credit Card Company */}
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Credit Card Company
-                        </label>
-                        <input
-                          type="text"
-                          name="creditCardCompany"
-                          value={formData.creditCardCompany}
-                          onChange={handleInputChange}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                          placeholder="Visa, MasterCard, etc."
-                        />
-                      </div>
-                      
-                      {/* Card Number */}
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Card Number
-                        </label>
-                        <input
-                          type="text"
-                          name="cardNumber"
-                          value={formData.cardNumber}
-                          onChange={handleInputChange}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                          placeholder="XXXX-XXXX-XXXX-XXXX"
-                        />
-                      </div>
-                    </>
-                  )}
-                  
-                  {/* Conditional Online Payment Fields */}
-                  {formData.modeOfPaymentId && paymentModes.some(mode => 
-                    mode.id === formData.modeOfPaymentId && 
-                    mode.name && 
-                    (mode.name.toUpperCase().includes('ONLINE') || mode.name.toUpperCase().includes('PAYPAL') || mode.name.toUpperCase().includes('STRIPE'))
-                  ) && (
-                    <>
-                      {/* Online Company Name */}
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Online Company Name
-                        </label>
-                        <input
-                          type="text"
-                          name="onlineCompanyName"
-                          value={formData.onlineCompanyName}
-                          onChange={handleInputChange}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                          placeholder="PayPal, Stripe, etc."
-                        />
-                      </div>
-                    </>
-                  )}
-                  
-                  {/* Narration */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Narration
-                    </label>
-                    <textarea
-                      name="narration"
-                      value={formData.narration}
-                      onChange={handleInputChange}
-                      rows={2}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                      placeholder="Additional notes..."
-                    />
-                  </div>
-                  {/* Form Actions */}
-                  <div className="flex space-x-4">
-                    <button
-                      type="submit"
-                      disabled={loading}
-                      className="flex-1 bg-indigo-600 text-white font-semibold py-3 px-4 rounded-lg hover:bg-indigo-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {loading ? 'Saving...' : 'Save Advance'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleClearForm}
-                      className="flex items-center space-x-2 px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
-                    >
-                      <span>Clear Form</span>
-                    </button>
-                  </div>
-                </form>
-              </>
-            )}
-            {activeTab === 'edit' && (
-              <div className="p-6">
-                <h2 className="text-xl font-semibold text-gray-900 mb-4">Edit Advance</h2>
-                {editingAdvance ? (
-                  <form onSubmit={handleUpdateAdvance} className="space-y-6">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      {/* Receipt Number */}
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Receipt Number
-                        </label>
-                        <input
-                          type="text"
-                          name="receiptNumber"
-                          value={editForm.receiptNumber}
-                          onChange={handleEditInputChange}
-                          disabled
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-500"
-                        />
-                      </div>
-                      {/* Context Dropdown (single field) */}
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Reservation / Room / Bill Number *
-                        </label>
-                        <input
-                          type="text"
-                          name="contextValue"
-                          value={editForm.contextValue}
-                          onChange={handleEditInputChange}
-                          placeholder="e.g., R12345, F67890, or B54321"
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                          required
-                          disabled
-                        />
-                        <p className="mt-1 text-xs text-gray-500">Prefix: R (Reservation), F (Folio), B (Bill)</p>
-                      </div>
-                      {/* Date */}
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Date *
-                        </label>
-                        <input
-                          type="date"
-                          name="date"
-                          value={editForm.date}
-                          onChange={handleEditInputChange}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                          required
-                        />
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {/* Guest Name */}
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Guest Name
-                        </label>
-                        <div className="relative">
-                          <input
-                            type="text"
-                            name="guestName"
-                            value={editForm.guestName}
-                            onChange={handleEditInputChange}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                          />
-                          {autoFillLoading && (
-                            <div className="absolute inset-y-0 right-0 flex items-center pr-3">
-                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-indigo-600"></div>
-                            </div>
-                          )}
-                        </div>
-                        {!autoFillLoading && attemptedAutoFill && contextError && (
-                          <p className="mt-1 text-xs text-red-500">
-                            {contextError}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {/* Mode of Payment */}
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Mode of Payment *
-                        </label>
-                        <select
-                          name="modeOfPaymentId"
-                          value={editForm.modeOfPaymentId}
-                          onChange={handleEditInputChange}
-                          required
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        >
-                          <option value="">Select mode</option>
-                          {paymentModes.map(mode => (
-                            <option key={mode.id} value={mode.id}>
-                              {mode.name}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      {/* Amount */}
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Amount *
-                        </label>
-                        <input
-                          type="number"
-                          name="amount"
-                          value={editForm.amount}
-                          onChange={handleEditInputChange}
-                          min="0"
-                          step="0.01"
-                          required
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                          placeholder="0.00"
-                        />
-                      </div>
-                    </div>
-                    {/* Details */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Details
-                      </label>
-                      <textarea
-                        name="details"
-                        value={editForm.details}
-                        onChange={handleEditInputChange}
-                        rows={3}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                        placeholder="Payment details..."
-                      />
-                    </div>
-                    
-                    {/* Conditional Credit Card Fields */}
-                    {editForm.modeOfPaymentId && paymentModes.some(mode => 
-                      mode.id === editForm.modeOfPaymentId && 
-                      mode.name && 
-                      (mode.name.toUpperCase().includes('CARD') || mode.name.toUpperCase().includes('CREDIT') || mode.name.toUpperCase().includes('DEBIT'))
-                    ) && (
-                      <>
-                        {/* Credit Card Company */}
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">
-                            Credit Card Company
-                          </label>
-                          <input
-                            type="text"
-                            name="creditCardCompany"
-                            value={editForm.creditCardCompany}
-                            onChange={handleEditInputChange}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                            placeholder="Visa, MasterCard, etc."
-                          />
-                        </div>
-                        
-                        {/* Card Number */}
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">
-                            Card Number
-                          </label>
-                          <input
-                            type="text"
-                            name="cardNumber"
-                            value={editForm.cardNumber}
-                            onChange={handleEditInputChange}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                            placeholder="XXXX-XXXX-XXXX-XXXX"
-                          />
-                        </div>
-                      </>
-                    )}
-                    
-                    {/* Conditional Online Payment Fields */}
-                    {editForm.modeOfPaymentId && paymentModes.some(mode => 
-                      mode.id === editForm.modeOfPaymentId && 
-                      mode.name && 
-                      (mode.name.toUpperCase().includes('ONLINE') || mode.name.toUpperCase().includes('PAYPAL') || mode.name.toUpperCase().includes('STRIPE'))
-                    ) && (
-                      <>
-                        {/* Online Company Name */}
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">
-                            Online Company Name
-                          </label>
-                          <input
-                            type="text"
-                            name="onlineCompanyName"
-                            value={editForm.onlineCompanyName}
-                            onChange={handleEditInputChange}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                            placeholder="PayPal, Stripe, etc."
-                          />
-                        </div>
-                      </>
-                    )}
-                    
-                    {/* Narration */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Narration
-                      </label>
-                      <textarea
-                        name="narration"
-                        value={editForm.narration}
-                        onChange={handleEditInputChange}
-                        rows={2}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                        placeholder="Additional notes..."
-                      />
-                    </div>
-                    {/* Form Actions */}
-                    <div className="flex space-x-4">
-                      <button
-                        type="submit"
-                        disabled={loading}
-                        className="flex-1 bg-indigo-600 text-white font-semibold py-3 px-4 rounded-lg hover:bg-indigo-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        {loading ? 'Updating...' : 'Update Advance'}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setActiveTab('view')}
-                        className="flex items-center space-x-2 px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
-                      >
-                        <span>Cancel</span>
-                      </button>
-                    </div>
-                  </form>
-                ) : (
-                  <div className="text-center py-8">
-                    <p className="text-gray-500 mb-4">Select an advance to edit from the View Advances tab.</p>
-                    <button
-                      onClick={() => setActiveTab('view')}
-                      className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
-                    >
-                      View Advances
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
-            
-            {activeTab === 'view' && (
-              <div className="p-6">
-                <div className="flex justify-between items-center mb-4">
-                  <h2 className="text-xl font-semibold text-gray-900">View Advances</h2>
-                  <button 
-                    onClick={fetchAdvances}
-                    className="px-4 py-2 bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200 text-sm"
-                  >
-                    Refresh
-                  </button>
-                </div>
-                {advancesLoading ? (
-                  <div className="flex justify-center items-center h-32">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
-                    <span className="ml-2 text-gray-600">Loading advances...</span>
-                  </div>
-                ) : advances.length > 0 ? (
-                  <>
-                    <div className="overflow-hidden rounded-lg border border-gray-200">
-                      <div className="overflow-hidden max-h-96">
-                        <table className="w-full divide-y divide-gray-200">
-                          <thead className="bg-gray-50">
-                            <tr>
-                              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Receipt No</th>
-                              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
-                              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Guest Name</th>
-                              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Context</th>
-                              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
-                              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Payment Mode</th>
-                              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                            </tr>
-                          </thead>
-                          <tbody className="bg-white divide-y divide-gray-200">
-                            {/* Calculate pagination */}
-                            {(() => {
-                              const indexOfLastRecord = currentPage * recordsPerPage;
-                              const indexOfFirstRecord = indexOfLastRecord - recordsPerPage;
-                              const currentRecords = advances.slice(indexOfFirstRecord, indexOfLastRecord);
-                              
-                              return currentRecords.map((advance) => (
-                                <tr key={advance.advanceId} className="hover:bg-gray-50">
-                                  <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
-                                    {advance.receiptNo || 'N/A'}
-                                  </td>
-                                  <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
-                                    {advance.date ? new Date(advance.date).toLocaleDateString() : 'N/A'}
-                                  </td>
-                                  <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
-                                    {advance.guestName}
-                                  </td>
-                                  <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
-                                    {advance.reservationNo ? `R: ${advance.reservationNo}` : 
-                                     advance.folioNo ? `F: ${advance.folioNo}` : 
-                                     advance.billNo ? `B: ${advance.billNo}` : 'N/A'}
-                                  </td>
-                                  <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
-                                    ₹{advance.amount?.toFixed(2) || '0.00'}
-                                  </td>
-                                  <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
-                                    {advance.modeOfPaymentName || advance.modeOfPaymentId || 'N/A'}
-                                  </td>
-                                  <td className="px-4 py-2 whitespace-nowrap text-sm text-gray-900">
-                                    <div className="flex space-x-2">
-                                      <button
-                                        onClick={() => handleEditAdvance(advance)}
-                                        className="text-indigo-600 hover:text-indigo-900"
-                                      >
-                                        Edit
-                                      </button>
-                                      <button
-                                        onClick={() => advance.advanceId && handleDeleteAdvance(advance.advanceId)}
-                                        className="text-red-600 hover:text-red-900"
-                                      >
-                                        Delete
-                                      </button>
-                                    </div>
-                                  </td>
-                                </tr>
-                              ));
-                            })()}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                    {/* Pagination */}
-                    <div className="flex items-center justify-between border-t border-gray-200 px-4 py-3 sm:px-6 bg-white">
-                      <div className="flex flex-1 justify-between sm:hidden">
-                        <button
-                          onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                          disabled={currentPage === 1}
-                          className="relative inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-                        >
-                          Previous
-                        </button>
-                        <button
-                          onClick={() => setCurrentPage(prev => {
-                            const totalPages = Math.ceil(advances.length / recordsPerPage);
-                            return Math.min(prev + 1, totalPages);
-                          })}
-                          disabled={currentPage === Math.ceil(advances.length / recordsPerPage)}
-                          className="relative ml-3 inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-                        >
-                          Next
-                        </button>
-                      </div>
-                      <div className="hidden sm:flex sm:flex-1 sm:items-center sm:justify-between">
-                        <div>
-                          <p className="text-sm text-gray-700">
-                            Showing <span className="font-medium">{Math.min((currentPage - 1) * recordsPerPage + 1, advances.length)}</span> to{' '}
-                            <span className="font-medium">{Math.min(currentPage * recordsPerPage, advances.length)}</span> of{' '}
-                            <span className="font-medium">{advances.length}</span> results
-                          </p>
-                        </div>
-                        <div>
-                          <nav className="isolate inline-flex -space-x-px rounded-md shadow-sm" aria-label="Pagination">
-                            <button
-                              onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-                              disabled={currentPage === 1}
-                              className="relative inline-flex items-center rounded-l-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:z-20 focus:outline-offset-0 disabled:opacity-50"
-                            >
-                              <span className="sr-only">Previous</span>
-                              <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                                <path fillRule="evenodd" d="M12.79 5.23a.75.75 0 01-.02 1.06L8.832 10l3.938 3.71a.75.75 0 11-1.04 1.08l-4.5-4.25a.75.75 0 010-1.08l4.5-4.25a.75.75 0 011.06.02z" clipRule="evenodd" />
-                              </svg>
-                            </button>
-                            
-                            {/* Page numbers */}
-                            {(() => {
-                              const totalPages = Math.ceil(advances.length / recordsPerPage);
-                              const pageNumbers = [];
-                              const maxVisiblePages = 5;
-                              
-                              // Calculate the range of page numbers to display
-                              let startPage = Math.max(1, currentPage - Math.floor(maxVisiblePages / 2));
-                              let endPage = Math.min(totalPages, startPage + maxVisiblePages - 1);
-                              
-                              // Adjust if we're near the end
-                              if (endPage - startPage + 1 < maxVisiblePages) {
-                                startPage = Math.max(1, endPage - maxVisiblePages + 1);
-                              }
-                              
-                              // Add first page and ellipsis if needed
-                              if (startPage > 1) {
-                                pageNumbers.push(
-                                  <button
-                                    key={1}
-                                    onClick={() => setCurrentPage(1)}
-                                    className="relative inline-flex items-center px-4 py-2 text-sm font-semibold text-gray-900 ring-1 ring-inset ring-gray-300 hover:bg-gray-50"
-                                  >
-                                    1
-                                  </button>
-                                );
-                                if (startPage > 2) {
-                                  pageNumbers.push(
-                                    <span key="start-ellipsis" className="relative inline-flex items-center px-4 py-2 text-sm font-semibold text-gray-700 ring-1 ring-inset ring-gray-300">
-                                      ...
-                                    </span>
-                                  );
-                                }
-                              }
-                              
-                              // Add page numbers in the visible range
-                              for (let i = startPage; i <= endPage; i++) {
-                                pageNumbers.push(
-                                  <button
-                                    key={i}
-                                    onClick={() => setCurrentPage(i)}
-                                    className={`relative inline-flex items-center px-4 py-2 text-sm font-semibold ${
-                                      currentPage === i
-                                        ? 'z-10 bg-indigo-600 text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600'
-                                        : 'text-gray-900 ring-1 ring-inset ring-gray-300 hover:bg-gray-50'
-                                    }`}
-                                    aria-current={currentPage === i ? 'page' : undefined}
-                                  >
-                                    {i}
-                                  </button>
-                                );
-                              }
-                              
-                              // Add ellipsis and last page if needed
-                              if (endPage < totalPages) {
-                                if (endPage < totalPages - 1) {
-                                  pageNumbers.push(
-                                    <span key="end-ellipsis" className="relative inline-flex items-center px-4 py-2 text-sm font-semibold text-gray-700 ring-1 ring-inset ring-gray-300">
-                                      ...
-                                    </span>
-                                  );
-                                }
-                                pageNumbers.push(
-                                  <button
-                                    key={totalPages}
-                                    onClick={() => setCurrentPage(totalPages)}
-                                    className="relative inline-flex items-center px-4 py-2 text-sm font-semibold text-gray-900 ring-1 ring-inset ring-gray-300 hover:bg-gray-50"
-                                  >
-                                    {totalPages}
-                                  </button>
-                                );
-                              }
-                              
-                              return pageNumbers;
-                            })()}
-                            
-                            <button
-                              onClick={() => setCurrentPage(prev => {
-                                const totalPages = Math.ceil(advances.length / recordsPerPage);
-                                return Math.min(prev + 1, totalPages);
-                              })}
-                              disabled={currentPage === Math.ceil(advances.length / recordsPerPage)}
-                              className="relative inline-flex items-center rounded-r-md px-2 py-2 text-gray-400 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:z-20 focus:outline-offset-0 disabled:opacity-50"
-                            >
-                              <span className="sr-only">Next</span>
-                              <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                                <path fillRule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z" clipRule="evenodd" />
-                              </svg>
-                            </button>
-                          </nav>
-                        </div>
-                      </div>
-                    </div>
-                  </>
-                ) : (
-                  <div className="text-center py-8 text-gray-500">
-                    <p>No advances found.</p>
-                    <button 
-                      onClick={fetchAdvances}
-                      className="mt-4 px-4 py-2 bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200"
-                    >
-                      Refresh
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-          {/* Summary Sidebar */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-            <div className="p-6 border-b border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-900">Summary of Advances</h3>
-            </div>
-            <div className="p-6 space-y-6">
-              {/* Stats */}
-              <div className="space-y-4">
-                {summaryLoading ? (
-                  <div className="text-center py-4">
-                    <div className="inline-block animate-spin rounded-full h-6 w-6 border-t-2 border-b-2 border-indigo-600"></div>
-                    <p className="text-sm text-gray-500 mt-2">Loading summary...</p>
-                  </div>
-                ) : (
-                  <>
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm text-gray-600">Total Advances Today</span>
-                      <span className="text-lg font-semibold text-gray-900">Rs. {summary.totalToday.toLocaleString()}</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm text-gray-600">Number of Transactions</span>
-                      <span className="text-lg font-semibold text-gray-900">{summary.transactionCount}</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm text-gray-600">Avg. Advance Amount</span>
-                      <span className="text-lg font-semibold text-gray-900">Rs. {summary.avgAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })}</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm text-gray-600">Last Week Total</span>
-                      <span className="text-lg font-semibold text-gray-900">Rs. {summary.lastWeekTotal.toLocaleString()}</span>
-                    </div>
-                  </>
-                )}
-              </div>
-              
-              {/* Chart */}
-              <div>
-                <h4 className="text-sm font-medium text-gray-700 mb-3">Weekly Advances</h4>
-                {summaryLoading ? (
-                  <div className="h-32 flex items-center justify-center">
-                    <div className="inline-block animate-spin rounded-full h-6 w-6 border-t-2 border-b-2 border-indigo-600"></div>
-                  </div>
-                ) : (
-                  <div className="h-32">
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={summary.chartData}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
-                        <XAxis 
-                          dataKey="name" 
-                          fontSize={10} 
-                          tickLine={false}
-                          axisLine={false}
-                        />
-                        <YAxis hide />
-                        <Tooltip 
-                          formatter={(value) => [`Rs. ${value}`, 'Amount']}
-                          labelStyle={{ color: '#374151' }}
-                          contentStyle={{
-                            backgroundColor: 'white',
-                            border: '1px solid #e5e7eb',
-                            borderRadius: '8px',
-                            fontSize: '12px'
-                          }}
-                        />
-                        <Bar 
-                          dataKey="amount" 
-                          fill="url(#colorGradient)" 
-                          radius={[2, 2, 0, 0]}
-                        />
-                        <defs>
-                          <linearGradient id="colorGradient" x1="0" y1="0" x2="0" y2="1">
-                            <stop offset="0%" stopColor="#3B82F6" />
-                            <stop offset="100%" stopColor="#8B5CF6" />
-                          </linearGradient>
-                        </defs>
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                )}
-              </div>
-              
-              <div className="text-xs text-gray-500 text-center">
-                {summaryLoading ? 'Loading data...' : 'Real-time data synchronization is active.'}
-              </div>
             </div>
           </div>
         </div>
