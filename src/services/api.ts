@@ -4,7 +4,7 @@ import axios, { AxiosResponse } from 'axios';
 import { ApiResponse, User, UserType, Room, RoomStats, Reservation, CheckIn, Advance, PaymentMode, RoomType, Company, PlanType, Tax, AccountHead, Nationality, RefMode, ArrivalMode, ReservationSource, Transaction, HousekeepingTask, HousekeepingStats, SettlementType, BillUpdateRequest } from '../types/api';
 
 const API_BASE_URL = 'https://backend-production-1f41.up.railway.app/api'
-
+//const API_BASE_URL = 'http://localhost:8080/api';
 
 // Create axios instance
 const apiClient = axios.create({
@@ -160,6 +160,15 @@ export const roomApi = {
   // Get room availability for a date range
   getRoomAvailability: (startDate: string, endDate: string): Promise<AxiosResponse<ApiResponse<Room[]>>> =>
     apiClient.get(`/rooms/availability?startDate=${startDate}&endDate=${endDate}`),
+  
+  // Room shift functionality
+  shiftRoom: (data: { 
+    currentRoomId: string; 
+    newRoomId: string; 
+    folioNo: string; 
+    remarks?: string;
+  }): Promise<AxiosResponse<ApiResponse<any>>> =>
+    apiClient.put('/rooms/shift', data),
 };
 
 export const transactionApi = {
@@ -170,6 +179,7 @@ export const transactionApi = {
     amount: number;
     narration?: string;
     voucherNo?: string;
+    includingGst?: 'Y' | 'N';
     
   }): Promise<AxiosResponse<ApiResponse<Transaction>>> =>
     apiClient.post('/transactions/inhouse', data),
@@ -238,6 +248,14 @@ export const reservationApi = {
   // Update reservation status
   updateReservationStatus: (reservationNo: string, status: string): Promise<AxiosResponse<ApiResponse<Reservation>>> =>
     apiClient.put(`/reservations/${reservationNo}/status`, { status }),
+  
+  // Get deleted reservations
+  getDeletedReservations: (): Promise<AxiosResponse<ApiResponse<Reservation[]>>> =>
+    apiClient.get('/reservations/deleted'),
+  
+  // Restore deleted reservation
+  restoreReservation: (reservationId: string): Promise<AxiosResponse<ApiResponse<Reservation>>> =>
+    apiClient.put(`/reservations/${reservationId}/restore`),
 };
 
 // Check-in APIs
@@ -437,10 +455,10 @@ export const masterDataApi = {
   getUserTypes: (): Promise<AxiosResponse<ApiResponse<UserType[]>>> =>
     apiClient.get('/user-types'),
   
-  createUserType: (userTypeData: { typeName: string }): Promise<AxiosResponse<ApiResponse<UserType>>> =>
+  createUserType: (userTypeData: { typeName: string }): Promise<AxiosResponse<UserType>> =>
     apiClient.post('/user-types', userTypeData),
   
-  updateUserType: (userTypeId: string, userTypeData: { typeName: string }): Promise<AxiosResponse<ApiResponse<UserType>>> =>
+  updateUserType: (userTypeId: string, userTypeData: { typeName: string }): Promise<AxiosResponse<UserType>> =>
     apiClient.put(`/user-types/${userTypeId}`, userTypeData),
   
   deleteUserType: (userTypeId: string): Promise<AxiosResponse<ApiResponse<any>>> =>
@@ -471,6 +489,14 @@ export const operationsApi = {
     balance: number 
   }): Promise<AxiosResponse<ApiResponse<any>>> =>
     apiClient.post('/operations/shift-change', data),
+  
+  // Shift close with automatic shift rotation logic
+  shiftClose: (data: { balance: number }): Promise<AxiosResponse<ApiResponse<any>>> =>
+    apiClient.post('/operations/shift-close', data),
+  
+  // Get HMS system information
+  getHmsystem: (): Promise<AxiosResponse<ApiResponse<any>>> =>
+    apiClient.get('/operations/hmsystem'),
 };
 
 // Housekeeping APIs

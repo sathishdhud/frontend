@@ -10,6 +10,7 @@ interface FormState {
     amount: string;
     narration: string;
     voucherNo: string;
+    includingGst: 'Y' | 'N';
 }
 
 const initialFormState: FormState = {
@@ -18,6 +19,7 @@ const initialFormState: FormState = {
     amount: '',
     narration: '',
     voucherNo: '',
+    includingGst: 'N',
 };
 
 const TransactionForm: React.FC = () => {
@@ -93,6 +95,10 @@ const TransactionForm: React.FC = () => {
         }
     };
 
+    const handleIncludingGstChange = (includingGst: 'Y' | 'N') => {
+        setForm(prev => ({ ...prev, includingGst }));
+    };
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
@@ -111,6 +117,7 @@ const TransactionForm: React.FC = () => {
                 amount: Number(form.amount),
                 narration: form.narration,
                 voucherNo: form.voucherNo || undefined, // Only send if provided
+                includingGst: form.includingGst,
             });
             alert('Transaction saved successfully!');
             handleClear();
@@ -194,6 +201,33 @@ const TransactionForm: React.FC = () => {
                                 className="w-full border rounded-lg px-3 py-2"
                                 required
                             />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium mb-2">Including GST</label>
+                            <div className="flex items-center space-x-4">
+                                <label className="inline-flex items-center">
+                                    <input
+                                        type="radio"
+                                        name="includingGst"
+                                        value="Y"
+                                        checked={form.includingGst === 'Y'}
+                                        onChange={() => handleIncludingGstChange('Y')}
+                                        className="form-radio h-4 w-4 text-indigo-600"
+                                    />
+                                    <span className="ml-2">Yes</span>
+                                </label>
+                                <label className="inline-flex items-center">
+                                    <input
+                                        type="radio"
+                                        name="includingGst"
+                                        value="N"
+                                        checked={form.includingGst === 'N'}
+                                        onChange={() => handleIncludingGstChange('N')}
+                                        className="form-radio h-4 w-4 text-indigo-600"
+                                    />
+                                    <span className="ml-2">No</span>
+                                </label>
+                            </div>
                         </div>
                         <div>
                             <label className="block text-sm font-medium mb-2">Voucher Number</label>

@@ -6,8 +6,9 @@ import Layout from '../components/Layout/Layout';
 import { BillPayment } from '../types/api';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { CheckCircleIcon } from '@heroicons/react/24/outline';
+import jsPDF from 'jspdf';
 
-const Cashier: React.FC = () => {
+const Cashier = () => {
   const [activeTab, setActiveTab] = useState<'record' | 'edit' | 'view' | 'reprint' | 'expenses' | 'settlement' | 'sales' | 'split'>('record');
   const [loading, setLoading] = useState(false);
   const [paymentModes, setPaymentModes] = useState<PaymentMode[]>([]);
@@ -31,7 +32,6 @@ const Cashier: React.FC = () => {
   // Reprint Bill state
   const [reprintData, setReprintData] = useState({
     billNo: '',
-    folioNo: '',
   });
   
   // Expenses Entry state
@@ -42,6 +42,7 @@ const Cashier: React.FC = () => {
     amount: 0,
     narration: '',
     voucherNo: '',
+    includingGst: 'N' as 'Y' | 'N',
   });
   
   // Settlement Entry state
@@ -374,6 +375,36 @@ const Cashier: React.FC = () => {
       ...prev,
       [name]: type === 'number' ? Number(value) : value,
     }));
+    
+    // Auto-fill guest name when folio number changes
+    if (name === 'folioNo') {
+      autoFillGuestNameForExpenses(value);
+    }
+  };
+
+  // Function to auto-fill guest name for expenses entry based on folio number
+  const autoFillGuestNameForExpenses = async (folioNo: string) => {
+    if (!folioNo) {
+      setExpensesData(prev => ({ ...prev, guestName: '' }));
+      return;
+    }
+    
+    try {
+      const checkInsRes = await checkInApi.searchCheckIns(folioNo);
+      if (checkInsRes.data.success && checkInsRes.data.data.length > 0) {
+        const checkIn = checkInsRes.data.data.find((c: CheckIn) => c.folioNo === folioNo);
+        if (checkIn) {
+          setExpensesData(prev => ({ ...prev, guestName: checkIn.guestName }));
+        } else {
+          setExpensesData(prev => ({ ...prev, guestName: '' }));
+        }
+      } else {
+        setExpensesData(prev => ({ ...prev, guestName: '' }));
+      }
+    } catch (error) {
+      console.error('Failed to fetch guest name for expenses entry:', error);
+      setExpensesData(prev => ({ ...prev, guestName: '' }));
+    }
   };
 
   const handleSettlementInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
@@ -964,23 +995,409 @@ const Cashier: React.FC = () => {
     e.preventDefault();
     setLoading(true);
     try {
-      if (!reprintData.billNo || !reprintData.folioNo) {
-        showNotification('Please fill all required fields.', false);
+      if (!reprintData.billNo) {
+        showNotification('Please enter a bill number.', false);
         setLoading(false);
         return;
       }
       
-      showNotification('Reprint functionality is not fully implemented in the backend API. In a real implementation, this would reprint the bill.', false);
-      
-      // Reset form
-      setReprintData({
-        billNo: '',
-        folioNo: '',
-      });
+      // Try to get the bill data by bill number
+      try {
+        const billResponse = await billApi.getBillByBillNo(reprintData.billNo);
+        if (billResponse.data.success && billResponse.data.data) {
+          // Successfully retrieved bill data
+          const billData = billResponse.data.data;
+          
+          // Fetch related data to enrich the bill
+          let billTransactions: any[] = [];
+          let billAdvances: any[] = [];
+          
+          // Get transactions if available
+          if (billData.folioNo) {
+            try {
+              const transactionsResponse = await transactionApi.getTransactionsByFolio(billData.folioNo);
+              if (transactionsResponse.data.success) {
+                billTransactions = transactionsResponse.data.data;
+              }
+            } catch (error) {
+              console.error('Error fetching transactions:', error);
+            }
+          }
+          
+          // Get advances by bill number
+          try {
+            const advancesResponse = await advanceApi.getAdvancesByBill(billData.billNo);
+            if (advancesResponse.data.success) {
+              billAdvances = advancesResponse.data.data;
+            }
+          } catch (error) {
+            console.error('Error fetching advances by bill:', error);
+          }
+          
+          // If no advances found by bill number, try by folio number
+          if (billAdvances.length === 0 && billData.folioNo) {
+            try {
+              const advancesResponse = await advanceApi.getAdvancesByFolio(billData.folioNo);
+              if (advancesResponse.data.success) {
+                billAdvances = advancesResponse.data.data;
+              }
+            } catch (error) {
+              console.error('Error fetching advances by folio:', error);
+            }
+          }
+          
+          // If still no advances, try by reservation number
+          if (billAdvances.length === 0 && billData.reservationNo) {
+            try {
+              const advancesResponse = await advanceApi.getAdvancesByReservation(billData.reservationNo);
+              if (advancesResponse.data.success) {
+                billAdvances = advancesResponse.data.data;
+              }
+            } catch (error) {
+              console.error('Error fetching advances by reservation:', error);
+            }
+          }
+          
+          // Enrich bill data with additional information
+          const enrichedBillData = {
+            ...billData,
+            transactions: billTransactions,
+            advances: billAdvances,
+            // Calculate additional charges from transactions
+            additionalCharges: billTransactions
+              .filter((transaction: any) => transaction.accHeadId !== 'ROOM_CHARGES')
+              .reduce((sum: number, transaction: any) => sum + (transaction.amount || 0), 0),
+            // Calculate advance amount from advances
+            advanceAmount: billAdvances.reduce((sum, advance) => sum + (advance.amount || 0), 0),
+            // Ensure all date fields are properly formatted
+            checkInDate: billData.checkInDate ? new Date(billData.checkInDate).toLocaleDateString() : 'N/A',
+            checkOutDate: billData.checkOutDate ? new Date(billData.checkOutDate).toLocaleDateString() : 'N/A',
+            generatedAt: billData.generatedAt ? new Date(billData.generatedAt).toLocaleString() : '',
+            settlementDate: billData.settlementDate ? new Date(billData.settlementDate).toLocaleString() : 'N/A',
+          };
+          
+          // Generate and print PDF
+          generateBillPDF(enrichedBillData);
+          
+          // Show success message
+          showNotification(`Bill ${reprintData.billNo} retrieved and printed successfully.`, true);
+          
+          // Reset form
+          setReprintData({
+            billNo: '',
+          });
+        } else {
+          showNotification('Bill not found for the provided bill number.', false);
+        }
+      } catch (error: any) {
+        // If attempt fails, show error
+        showNotification(`Error retrieving bill: ${error.response?.data?.message || 'Failed to retrieve bill for reprinting'}`, false);
+      }
     } catch (error: any) {
       showNotification(`Error: ${error.response?.data?.message || 'Failed to reprint bill'}`, false);
     } finally {
       setLoading(false);
+    }
+  };
+  
+  // Generate and print bill PDF with full details
+  const generateBillPDF = (billData: any) => {
+    try {
+      // Create a new jsPDF instance with A4 dimensions
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4'
+      });
+      
+      const pageWidth = pdf.internal.pageSize.getWidth();
+      const pageHeight = pdf.internal.pageSize.getHeight();
+      const margin = 20;
+      let currentY = margin; // Starting Y position
+      
+      // Set font styles
+      pdf.setFont('helvetica');
+      
+      // Add hotel header with modern styling
+      pdf.setFontSize(28);
+      pdf.setTextColor(40, 40, 40); // Dark gray color
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('HOTEL STAR', pageWidth / 2, currentY, { align: 'center' });
+      currentY += 12;
+      
+      // Add hotel address
+      pdf.setFontSize(11);
+      pdf.setFont('helvetica', 'normal');
+      pdf.setTextColor(100, 100, 100); // Medium gray
+      pdf.text('123 Hotel Street, City, State 12345', pageWidth / 2, currentY, { align: 'center' });
+      currentY += 6;
+      pdf.text('Phone: (123) 456-7890 | Email: info@hotelstar.com', pageWidth / 2, currentY, { align: 'center' });
+      currentY += 15;
+      
+      // Add decorative separator
+      pdf.setDrawColor(200, 200, 200);
+      pdf.setLineWidth(0.5);
+      pdf.line(margin, currentY, pageWidth - margin, currentY);
+      currentY += 12;
+      
+      // Add bill title with modern styling
+      pdf.setFontSize(22);
+      pdf.setTextColor(40, 40, 40);
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('BILL INVOICE', pageWidth / 2, currentY, { align: 'center' });
+      currentY += 15;
+      
+      // Add date and bill info in a modern card-like format
+      pdf.setFontSize(11);
+      const today = new Date().toLocaleDateString();
+      
+      // Bill information card
+      const cardX = pageWidth - 90;
+      const cardY = currentY;
+      const cardWidth = 70;
+      const cardHeight = 35;
+      
+      // Draw card with rounded corners effect
+      pdf.setFillColor(245, 245, 245);
+      pdf.rect(cardX, cardY, cardWidth, cardHeight, 'F');
+      pdf.setDrawColor(220, 220, 220);
+      pdf.rect(cardX, cardY, cardWidth, cardHeight);
+      
+      // Card content
+      pdf.setFont('helvetica', 'bold');
+      pdf.setTextColor(60, 60, 60);
+      pdf.text('Bill No:', cardX + 5, cardY + 10);
+      pdf.text('Date:', cardX + 5, cardY + 20);
+      pdf.setFont('helvetica', 'normal');
+      pdf.text(billData.billNo || 'N/A', cardX + 25, cardY + 10);
+      pdf.text(today, cardX + 25, cardY + 20);
+      
+      // Guest information in a two-column layout
+      const leftColX = margin;
+      const rightColX = pageWidth / 2;
+      
+      currentY += 40;
+      
+      pdf.setFont('helvetica', 'bold');
+      pdf.setTextColor(60, 60, 60);
+      pdf.text('Guest Name:', leftColX, currentY + 10);
+      pdf.text('Room No:', leftColX, currentY + 20);
+      pdf.text('Check-in:', leftColX, currentY + 30);
+      pdf.text('Check-out:', leftColX, currentY + 40);
+      
+      pdf.text('Folio No:', rightColX - 10, currentY + 10);
+      pdf.text('Status:', rightColX - 10, currentY + 20);
+      pdf.text('Settlement:', rightColX - 10, currentY + 30);
+      
+      pdf.setFont('helvetica', 'normal');
+      pdf.setTextColor(40, 40, 40);
+      pdf.text(billData.guestName || 'N/A', leftColX + 30, currentY + 10);
+      pdf.text(billData.roomNo || 'N/A', leftColX + 30, currentY + 20);
+      pdf.text(billData.checkInDate || 'N/A', leftColX + 30, currentY + 30);
+      pdf.text(billData.checkOutDate || 'N/A', leftColX + 30, currentY + 40);
+      
+      pdf.text(billData.folioNo || 'N/A', rightColX + 30, currentY + 10);
+      pdf.text(billData.settlementStatus || 'Pending', rightColX + 30, currentY + 20);
+      pdf.text(billData.settlementDate || 'N/A', rightColX + 30, currentY + 30);
+      
+      currentY += 55;
+      
+      // Add items table header with modern styling
+      pdf.setFontSize(16);
+      pdf.setTextColor(40, 40, 40);
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('Charges Summary', margin, currentY);
+      currentY += 12;
+      
+      // Table with modern styling
+      const tableStartX = margin;
+      const tableWidth = pageWidth - (margin * 2);
+      const rowHeight = 10;
+      
+      // Table headers with background
+      pdf.setFillColor(60, 60, 60);
+      pdf.rect(tableStartX, currentY, tableWidth, rowHeight, 'F');
+      
+      pdf.setFontSize(12);
+      pdf.setFont('helvetica', 'bold');
+      pdf.setTextColor(255, 255, 255);
+      pdf.text('Description', tableStartX + 5, currentY + 7);
+      pdf.text('Amount (₹)', tableStartX + tableWidth - 5, currentY + 7, { align: 'right' });
+      
+      currentY += rowHeight;
+      
+      // Table content with alternating row colors
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(11);
+      pdf.setTextColor(40, 40, 40);
+      
+      // Add room charges
+      if (billData.roomCharges > 0) {
+        pdf.setFillColor(245, 245, 245);
+        pdf.rect(tableStartX, currentY, tableWidth, rowHeight, 'F');
+        pdf.text('Room Charges', tableStartX + 5, currentY + 7);
+        pdf.text(`₹${billData.roomCharges?.toFixed(2) || '0.00'}`, tableStartX + tableWidth - 5, currentY + 7, { align: 'right' });
+        currentY += rowHeight;
+      }
+      
+      // Add additional charges from transactions
+      if (billData.transactions && billData.transactions.length > 0) {
+        billData.transactions.forEach((transaction: any, index: number) => {
+          if (transaction.accHeadId !== 'ROOM_CHARGES' && transaction.amount > 0) {
+            const itemName = transaction.accHeadName || transaction.accHeadId || 'Item';
+            
+            // Alternating row colors
+            if (index % 2 === 0) {
+              pdf.setFillColor(250, 250, 250);
+              pdf.rect(tableStartX, currentY, tableWidth, rowHeight, 'F');
+            }
+            
+            pdf.text(itemName, tableStartX + 5, currentY + 7);
+            pdf.text(`₹${transaction.amount?.toFixed(2) || '0.00'}`, tableStartX + tableWidth - 5, currentY + 7, { align: 'right' });
+            currentY += rowHeight;
+            
+            // Check if we need a new page
+            if (currentY > pageHeight - 80) {
+              pdf.addPage();
+              currentY = margin;
+            }
+          }
+        });
+      }
+      
+      // Add separator line
+      pdf.setDrawColor(200, 200, 200);
+      pdf.setLineWidth(0.2);
+      pdf.line(tableStartX, currentY, tableStartX + tableWidth, currentY);
+      currentY += 8;
+      
+      // Calculate totals
+      const roomCharges = billData.roomCharges || 0;
+      const additionalCharges = billData.additionalCharges || 0;
+      const subtotal = roomCharges + additionalCharges;
+      const advanceAmount = billData.advanceAmount || (billData.advances ? billData.advances.reduce((sum: number, advance: any) => sum + (advance.amount || 0), 0) : 0);
+      const balanceAmount = Math.max(0, subtotal - advanceAmount);
+      const paidAmount = billData.paidAmount || 0;
+      
+      // Add summary in a card-like format
+      const summaryCardX = pageWidth - 100;
+      const summaryCardY = currentY;
+      const summaryCardWidth = 80;
+      const summaryCardHeight = 50;
+      
+      pdf.setFillColor(245, 245, 245);
+      pdf.rect(summaryCardX, summaryCardY, summaryCardWidth, summaryCardHeight, 'F');
+      pdf.setDrawColor(220, 220, 220);
+      pdf.rect(summaryCardX, summaryCardY, summaryCardWidth, summaryCardHeight);
+      
+      pdf.setFont('helvetica', 'bold');
+      pdf.setTextColor(60, 60, 60);
+      pdf.text('Room Charges:', summaryCardX + 5, summaryCardY + 12);
+      pdf.text('Additional Charges:', summaryCardX + 5, summaryCardY + 22);
+      pdf.text('Subtotal:', summaryCardX + 5, summaryCardY + 32);
+      pdf.text('Advance:', summaryCardX + 5, summaryCardY + 42);
+      
+      pdf.setFont('helvetica', 'normal');
+      pdf.text(`₹${roomCharges.toFixed(2)}`, summaryCardX + 50, summaryCardY + 12);
+      pdf.text(`₹${additionalCharges.toFixed(2)}`, summaryCardX + 50, summaryCardY + 22);
+      pdf.text(`₹${subtotal.toFixed(2)}`, summaryCardX + 50, summaryCardY + 32);
+      pdf.text(`₹${advanceAmount.toFixed(2)}`, summaryCardX + 50, summaryCardY + 42);
+      
+      // Total amount due with emphasis
+      currentY += summaryCardHeight + 10;
+      
+      pdf.setFontSize(14);
+      pdf.setFont('helvetica', 'bold');
+      pdf.setTextColor(40, 40, 40);
+      pdf.text('Total Amount Due:', pageWidth - 100, currentY);
+      pdf.text(`₹${balanceAmount.toFixed(2)}`, pageWidth - 20, currentY, { align: 'right' });
+      currentY += 20;
+      
+      // Add advance payments table if any
+      const advances = billData.advances || [];
+      if (advances.length > 0) {
+        currentY += 5;
+        pdf.setFontSize(16);
+        pdf.setTextColor(40, 40, 40);
+        pdf.setFont('helvetica', 'bold');
+        pdf.text('Advance Payments', margin, currentY);
+        currentY += 12;
+        
+        // Advance payments table with modern styling
+        const advanceTableStartX = margin;
+        const advanceTableWidth = pageWidth - (margin * 2);
+        const advanceRowHeight = 10;
+        
+        // Table headers with background
+        pdf.setFillColor(60, 60, 60);
+        pdf.rect(advanceTableStartX, currentY, advanceTableWidth, advanceRowHeight, 'F');
+        
+        pdf.setFontSize(12);
+        pdf.setFont('helvetica', 'bold');
+        pdf.setTextColor(255, 255, 255);
+        pdf.text('Date', advanceTableStartX + 5, currentY + 7);
+        pdf.text('Receipt No', advanceTableStartX + 40, currentY + 7);
+        pdf.text('Payment Mode', advanceTableStartX + 80, currentY + 7);
+        pdf.text('Amount (₹)', advanceTableStartX + advanceTableWidth - 5, currentY + 7, { align: 'right' });
+        
+        currentY += advanceRowHeight;
+        
+        // Advance payments content with alternating row colors
+        pdf.setFont('helvetica', 'normal');
+        pdf.setFontSize(11);
+        pdf.setTextColor(40, 40, 40);
+        
+        advances.forEach((advance: any, index: number) => {
+          const date = advance.date ? new Date(advance.date).toLocaleDateString() : 'N/A';
+          
+          // Alternating row colors
+          if (index % 2 === 0) {
+            pdf.setFillColor(250, 250, 250);
+            pdf.rect(advanceTableStartX, currentY, advanceTableWidth, advanceRowHeight, 'F');
+          }
+          
+          pdf.text(date, advanceTableStartX + 5, currentY + 7);
+          pdf.text(advance.receiptNo || 'N/A', advanceTableStartX + 40, currentY + 7);
+          pdf.text(advance.modeOfPaymentName || advance.modeOfPaymentId || 'N/A', advanceTableStartX + 80, currentY + 7);
+          pdf.text(`₹${advance.amount?.toFixed(2) || '0.00'}`, advanceTableStartX + advanceTableWidth - 5, currentY + 7, { align: 'right' });
+          currentY += advanceRowHeight;
+          
+          // Check if we need a new page
+          if (currentY > pageHeight - 80) {
+            pdf.addPage();
+            currentY = margin;
+          }
+        });
+      }
+      
+      // Add footer with modern styling
+      currentY = pageHeight - 40;
+      
+      // Add decorative separator
+      pdf.setDrawColor(200, 200, 200);
+      pdf.setLineWidth(0.5);
+      pdf.line(margin, currentY, pageWidth - margin, currentY);
+      currentY += 10;
+      
+      // Add thank you message
+      pdf.setFontSize(16);
+      pdf.setFont('helvetica', 'bold');
+      pdf.setTextColor(40, 40, 40);
+      pdf.text('Thank You for Your Business!', pageWidth / 2, currentY, { align: 'center' });
+      currentY += 8;
+      
+      // Add website
+      pdf.setFontSize(11);
+      pdf.setFont('helvetica', 'normal');
+      pdf.setTextColor(100, 100, 100);
+      pdf.text('www.hotelstar.com', pageWidth / 2, currentY, { align: 'center' });
+      
+      // Save the PDF
+      const fileName = `Bill_${billData.billNo || 'unknown'}_${new Date().toISOString().slice(0, 10)}.pdf`;
+      pdf.save(fileName);
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      showNotification('Failed to generate PDF. Please try again.', false);
     }
   };
 
@@ -995,21 +1412,79 @@ const Cashier: React.FC = () => {
         return;
       }
       
-      showNotification('Expenses entry functionality is not fully implemented in the backend API. In a real implementation, this would record the expenses.', false);
+      // Get guest name by folio number if not already provided
+      let guestName = expensesData.guestName;
+      if (!guestName) {
+        try {
+          const checkInsRes = await checkInApi.searchCheckIns(expensesData.folioNo);
+          if (checkInsRes.data.success && checkInsRes.data.data.length > 0) {
+            const checkIn = checkInsRes.data.data.find((c: CheckIn) => c.folioNo === expensesData.folioNo);
+            if (checkIn) {
+              guestName = checkIn.guestName;
+            }
+          }
+        } catch (error) {
+          console.error('Failed to fetch guest name:', error);
+        }
+      }
       
-      // Reset form
-      setExpensesData({
-        folioNo: '',
-        guestName: '',
-        accHeadId: '',
-        amount: 0,
-        narration: '',
-        voucherNo: '',
+      // Create transaction using the same API as TransactionForm.tsx
+      const transactionResponse = await transactionApi.createInhouseTransaction({
+        folioNo: expensesData.folioNo,
+        guestName: guestName || 'Unknown Guest',
+        accHeadId: expensesData.accHeadId,
+        amount: expensesData.amount,
+        narration: expensesData.narration,
+        voucherNo: expensesData.voucherNo || undefined,
+        includingGst: expensesData.includingGst,
       });
+      
+      if (transactionResponse.data.success) {
+        showNotification('Expenses recorded successfully!', true);
+        
+        // Reset form
+        setExpensesData({
+          folioNo: '',
+          guestName: '',
+          accHeadId: '',
+          amount: 0,
+          narration: '',
+          voucherNo: '',
+          includingGst: 'N',
+        });
+      } else {
+        throw new Error(transactionResponse.data.message || 'Failed to record expenses');
+      }
     } catch (error: any) {
-      showNotification(`Error: ${error.response?.data?.message || 'Failed to record expenses'}`, false);
+      console.error('Error recording expenses:', error);
+      showNotification(`Error: ${error.response?.data?.message || error.message || 'Failed to record expenses'}`, false);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Function to auto-fill guest name for settlement entry based on folio number
+  const autoFillGuestNameForSettlement = async (folioNo: string) => {
+    if (!folioNo) {
+      setSettlementData(prev => ({ ...prev, guestName: '' }));
+      return;
+    }
+    
+    try {
+      const checkInsRes = await checkInApi.searchCheckIns(folioNo);
+      if (checkInsRes.data.success && checkInsRes.data.data.length > 0) {
+        const checkIn = checkInsRes.data.data.find((c: CheckIn) => c.folioNo === folioNo);
+        if (checkIn) {
+          setSettlementData(prev => ({ ...prev, guestName: checkIn.guestName }));
+        } else {
+          setSettlementData(prev => ({ ...prev, guestName: '' }));
+        }
+      } else {
+        setSettlementData(prev => ({ ...prev, guestName: '' }));
+      }
+    } catch (error) {
+      console.error('Failed to fetch guest name for settlement entry:', error);
+      setSettlementData(prev => ({ ...prev, guestName: '' }));
     }
   };
 
@@ -1024,18 +1499,67 @@ const Cashier: React.FC = () => {
         return;
       }
       
-      showNotification('Settlement entry functionality is not fully implemented in the backend API. In a real implementation, this would record the settlement.', false);
+      // Get the settlement type name for payment notes
+      const settlementType = settlementTypes.find(type => type.id === settlementData.settlementTypeId);
+      const paymentNotes = settlementData.remarks || `Settlement via ${settlementType?.name || settlementData.settlementTypeId}`;
       
-      // Reset form
-      setSettlementData({
-        folioNo: '',
-        guestName: '',
-        settlementTypeId: '',
-        amount: 0,
-        remarks: '',
+      // First, we need to get or generate a bill for this folio
+      const currentDate = new Date();
+      const currentYear = currentDate.getFullYear();
+      const nextYear = currentYear + 1;
+      const financialYear = `${currentYear.toString().slice(-2)}-${nextYear.toString().slice(-2)}`;
+      
+      // Try to get existing bill data by folio number
+      let billNo: string;
+      try {
+        const billResponse = await billApi.getBillByFolio(settlementData.folioNo);
+        if (billResponse.data.success && billResponse.data.data) {
+          billNo = billResponse.data.data.billNo;
+        } else {
+          // Generate a new bill if not found
+          const generateResponse = await billApi.generateBill(settlementData.folioNo, financialYear);
+          if (generateResponse.data.success && generateResponse.data.data) {
+            billNo = generateResponse.data.data.billNo;
+          } else {
+            throw new Error('Failed to generate bill');
+          }
+        }
+      } catch (error) {
+        // If fetching bill by folio fails, try to generate a new bill
+        const generateResponse = await billApi.generateBill(settlementData.folioNo, financialYear);
+        if (generateResponse.data.success && generateResponse.data.data) {
+          billNo = generateResponse.data.data.billNo;
+        } else {
+          throw new Error('Failed to generate bill');
+        }
+      }
+      
+      // Now add the payment/settlement to the bill
+      const paymentResponse = await billApi.addPaymentToBill(billNo, {
+        paymentAmount: settlementData.amount,
+        modeOfPaymentId: settlementData.settlementTypeId,
+        paymentNotes: paymentNotes
       });
+      
+      if (paymentResponse.data.success) {
+        showNotification('Expenses recorded successfully!', true);
+        
+        // Reset form
+        setExpensesData({
+          folioNo: '',
+          guestName: '',
+          accHeadId: '',
+          amount: 0,
+          narration: '',
+          voucherNo: '',
+          includingGst: 'N',
+        });
+      } else {
+        throw new Error(paymentResponse.data.message || 'Failed to record settlement');
+      }
     } catch (error: any) {
-      showNotification(`Error: ${error.response?.data?.message || 'Failed to record settlement'}`, false);
+      console.error('Error recording settlement:', error);
+      showNotification(`Error: ${error.response?.data?.message || error.message || 'Failed to record settlement'}`, false);
     } finally {
       setLoading(false);
     }
@@ -1181,6 +1705,7 @@ const Cashier: React.FC = () => {
             >
               Sales Receipts
             </button>
+           
             <button
               type="button"
               onClick={() => handleTabChange('split')}
@@ -1664,20 +2189,6 @@ const Cashier: React.FC = () => {
                         required
                       />
                     </div>
-                    {/* Folio Number */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Folio Number
-                      </label>
-                      <input
-                        type="text"
-                        name="folioNo"
-                        value={reprintData.folioNo}
-                        onChange={handleReprintInputChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                        required
-                      />
-                    </div>
                   </div>
                   <div className="flex justify-end">
                     <button
@@ -1741,8 +2252,8 @@ const Cashier: React.FC = () => {
                       >
                         <option value="">Select account head</option>
                         {accountHeads.map(head => (
-                          <option key={head.id} value={head.id}>
-                            {head.name}
+                          <option key={head.accountHeadId} value={head.accountHeadId}>
+                            {head.accountName}
                           </option>
                         ))}
                       </select>
@@ -1789,6 +2300,33 @@ const Cashier: React.FC = () => {
                         onChange={handleExpensesInputChange}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Including GST</label>
+                    <div className="flex items-center space-x-4">
+                      <label className="inline-flex items-center">
+                        <input
+                          type="radio"
+                          name="includingGst"
+                          value="Y"
+                          checked={expensesData.includingGst === 'Y'}
+                          onChange={() => setExpensesData(prev => ({ ...prev, includingGst: 'Y' }))}
+                          className="form-radio h-4 w-4 text-indigo-600"
+                        />
+                        <span className="ml-2">Yes</span>
+                      </label>
+                      <label className="inline-flex items-center">
+                        <input
+                          type="radio"
+                          name="includingGst"
+                          value="N"
+                          checked={expensesData.includingGst === 'N'}
+                          onChange={() => setExpensesData(prev => ({ ...prev, includingGst: 'N' }))}
+                          className="form-radio h-4 w-4 text-indigo-600"
+                        />
+                        <span className="ml-2">No</span>
+                      </label>
                     </div>
                   </div>
                   <div className="flex justify-end">
@@ -1949,8 +2487,8 @@ const Cashier: React.FC = () => {
                       >
                         <option value="">Select account head</option>
                         {accountHeads.map(head => (
-                          <option key={head.id} value={head.id}>
-                            {head.name}
+                          <option key={head.accountHeadId} value={head.accountHeadId}>
+                            {head.accountName}
                           </option>
                         ))}
                       </select>

@@ -61,6 +61,9 @@ export interface Reservation {
   roomsCheckedIn?: number;
   createdAt?: string;
   updatedAt?: string;
+  idProof1?: string;
+  idProof2?: string;
+  idProof3?: string;
   settlementTypeId?: string;
   settlementTypeName?: string;
   arrivalModeId?: string;
@@ -72,6 +75,11 @@ export interface Reservation {
   refModeName?: string;
   reservationSourceId?: string;
   reservationSourceName?: string;
+}
+
+// Interface for deleted reservations
+export interface DeletedReservation extends Reservation {
+  deletedAt?: string;
 }
 
 export interface CheckIn {
@@ -231,4 +239,29 @@ export interface HousekeepingStats {
   blockedRooms: number;
   outOfOrderRooms: number;
   occupancyPercentage: number;
+}
+
+// HMS System interface for shift management
+export interface Hmsystem {
+  id?: number;
+  shiftDate: string;
+  runningShift: number;
+  totalShift: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+// Shift interface
+export interface Shift {
+  id?: number;
+  shiftNo: string;
+  shiftDate: string;
+  balance: number;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+// Shift close request interface
+export interface ShiftCloseRequest {
+  balance: number;
 }

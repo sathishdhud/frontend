@@ -50,6 +50,20 @@ const Dashboard: React.FC = () => {
   const [shiftDate, setShiftDate] = useState<string>('');
   const [runningShift, setRunningShift] = useState<string>('');
 
+  // HMS System state
+  const [hmsystem, setHmsystem] = useState<any>(null);
+
+  // Room Shift state
+  const [showRoomShiftModal, setShowRoomShiftModal] = useState(false);
+  const [roomShiftData, setRoomShiftData] = useState({
+    fromRoomId: '',
+    toRoomId: '',
+    folioNo: '',
+    guestName: '',
+    reason: ''
+  });
+  const [roomShiftLoading, setRoomShiftLoading] = useState(false);
+
   const [checkInFormData, setCheckInFormData] = useState({
     reservationNo: '',
     guestName: '',
@@ -185,11 +199,25 @@ const Dashboard: React.FC = () => {
     fetchRoomStats();
     fetchRoomTypes();
     fetchFloors();
-    // In a real implementation, these would come from API calls
+    fetchHmsystemInfo();
+    // Initialize audit date
     setAuditDate(new Date().toLocaleDateString());
-    setShiftDate(new Date().toLocaleDateString());
-    setRunningShift('Shift 1');
   }, []);
+
+  const fetchHmsystemInfo = async () => {
+    try {
+      const response = await operationsApi.getHmsystem();
+      if (response.data.success) {
+        setHmsystem(response.data.data);
+        // Format the shift date properly
+        const date = new Date(response.data.data.shiftDate);
+        setShiftDate(date.toLocaleDateString());
+        setRunningShift(`Shift ${response.data.data.runningShift}`);
+      }
+    } catch (error) {
+      console.error('Failed to fetch HMS system info:', error);
+    }
+  };
 
   const fetchRooms = async () => {
     try {
@@ -361,10 +389,102 @@ const Dashboard: React.FC = () => {
     }
   };
 
-  const handleRoomShift = async (roomId: string) => {
-    // For now, we'll just show an alert - in a real implementation, 
-    // this would open a modal or navigate to a room shift page
-    alert('Room shift functionality would be implemented here');
+  const handleRoomShift = async (room: Room) => {
+    // Only allow room shifting for occupied rooms
+    if (room.status !== 'OD' && room.status !== 'OI') {
+      alert('Room shifting is only available for occupied rooms.');
+      return;
+    }
+    
+    // Open the room shift modal with pre-filled data
+    setRoomShiftData({
+      fromRoomId: room.roomId,
+      toRoomId: '',
+      folioNo: room.folioNo || '',
+      guestName: room.guestName || '',
+      reason: ''
+    });
+    setShowRoomShiftModal(true);
+  };
+
+  const handleRoomShiftSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setRoomShiftLoading(true);
+    
+    try {
+      // Validate that a target room is selected
+      if (!roomShiftData.toRoomId) {
+        alert('Please select a target room for the shift.');
+        setRoomShiftLoading(false);
+        return;
+      }
+      
+      // Validate that from and to rooms are different
+      if (roomShiftData.fromRoomId === roomShiftData.toRoomId) {
+        alert('Cannot shift to the same room. Please select a different target room.');
+        setRoomShiftLoading(false);
+        return;
+      }
+      
+      // Check if the target room is vacant
+      const targetRoom = rooms.find(r => r.roomId === roomShiftData.toRoomId);
+      if (targetRoom && targetRoom.status !== 'VR') {
+        alert('The selected target room is not vacant. Please select a vacant room for shifting.');
+        setRoomShiftLoading(false);
+        return;
+      }
+      
+      // Call the API with the correct field names
+      const response = await roomApi.shiftRoom({
+        currentRoomId: roomShiftData.fromRoomId,
+        newRoomId: roomShiftData.toRoomId,
+        folioNo: roomShiftData.folioNo,
+        remarks: roomShiftData.reason
+      });
+      
+      if (response.data.success) {
+        alert('Room shifted successfully!');
+        setShowRoomShiftModal(false);
+        // Reset form
+        setRoomShiftData({
+          fromRoomId: '',
+          toRoomId: '',
+          folioNo: '',
+          guestName: '',
+          reason: ''
+        });
+        // Refresh room data
+        await fetchRooms();
+        await fetchRoomStats();
+      } else {
+        alert(response.data.message || 'Failed to shift room');
+      }
+    } catch (error: any) {
+      console.error('Failed to shift room:', error);
+      let errorMessage = 'Failed to shift room. Please try again.';
+      
+      if (error.response) {
+        if (error.response.data?.message) {
+          errorMessage = error.response.data.message;
+        } else if (error.response.status === 400) {
+          errorMessage = 'Invalid request. Please check the data and try again.';
+        } else if (error.response.status === 401) {
+          errorMessage = 'Unauthorized. Please log in again.';
+        } else if (error.response.status === 405) {
+          errorMessage = 'Room shift operation is not supported. Please contact system administrator.';
+        } else {
+          errorMessage = `Server error (${error.response.status}). Please try again.`;
+        }
+      } else if (error.request) {
+        errorMessage = 'Network error. Please check your connection and try again.';
+      } else {
+        errorMessage = error.message || errorMessage;
+      }
+      
+      alert(errorMessage);
+    } finally {
+      setRoomShiftLoading(false);
+    }
   };
 
   const filteredRooms = rooms.filter(room =>
@@ -417,7 +537,15 @@ const Dashboard: React.FC = () => {
         {/* Dashboard Overview Information */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
-            <h2 className="text-lg font-semibold text-gray-900 mb-4">System Information</h2>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold text-gray-900">System Information</h2>
+              <button
+                onClick={fetchHmsystemInfo}
+                className="text-blue-600 hover:text-blue-800"
+              >
+                <ArrowPathIcon className="w-4 h-4" />
+              </button>
+            </div>
             <div className="space-y-3">
               <div className="flex justify-between">
                 <span className="text-gray-600">Audit Date:</span>
@@ -547,56 +675,108 @@ const Dashboard: React.FC = () => {
           {currentRooms.map((room) => (
             <div 
               key={room.roomId} 
-              className={`bg-white rounded-xl shadow-md border-2 border-gray-200 overflow-hidden cursor-pointer transition-all duration-200 hover:shadow-lg hover:-translate-y-1 flex flex-col ${
-                room.status === 'VR' ? 'hover:border-green-400 border-green-200' : 
-                room.status === 'OD' || room.status === 'OI' ? 'hover:border-blue-400 border-blue-200' : 'hover:border-red-400 border-red-200'
+              className={`rounded-xl shadow-md border-2 overflow-hidden cursor-pointer transition-all duration-200 hover:shadow-lg hover:-translate-y-1 flex flex-col ${
+                room.status === 'VR' ? 'bg-green-100 border-green-300 hover:border-green-500' : 
+                room.status === 'OD' || room.status === 'OI' ? 'bg-red-100 border-red-300 hover:border-red-500' : 
+                'bg-gray-100 border-gray-300 hover:border-gray-500'
               }`}
               onClick={() => handleRoomClick(room)}
             >
               <div className="p-4 flex flex-col items-center justify-center flex-grow">
-                <div className="text-2xl font-bold text-gray-800 mb-2">{room.roomNo}</div>
-                <div className="text-sm text-gray-600 mb-2">Floor: {room.floor}</div>
+                <div className={`text-2xl font-bold mb-2 ${
+                  room.status === 'VR' ? 'text-green-800' : 
+                  room.status === 'OD' || room.status === 'OI' ? 'text-red-800' : 
+                  'text-gray-800'
+                }`}>
+                  {room.roomNo}
+                </div>
+                <div className={`text-sm mb-2 ${
+                  room.status === 'VR' ? 'text-green-700' : 
+                  room.status === 'OD' || room.status === 'OI' ? 'text-red-700' : 
+                  'text-gray-700'
+                }`}>
+                  Floor: {room.floor}
+                </div>
                 {room.roomTypeName && (
-                  <div className="text-sm text-gray-600 mb-2">Type: {room.roomTypeName}</div>
+                  <div className={`text-sm mb-2 ${
+                    room.status === 'VR' ? 'text-green-700' : 
+                    room.status === 'OD' || room.status === 'OI' ? 'text-red-700' : 
+                    'text-gray-700'
+                  }`}>
+                    Type: {room.roomTypeName}
+                  </div>
                 )}
                 <span className={`inline-flex items-center space-x-1 px-3 py-1 rounded-full text-sm font-medium ${
-                  room.status === 'VR' ? 'bg-green-100 text-green-800 border border-green-200' :
-                  room.status === 'OD' || room.status === 'OI' ? 'bg-blue-100 text-blue-800 border border-blue-200' :
-                  'bg-red-100 text-red-800 border border-red-200'
+                  room.status === 'VR' ? 'bg-green-200 text-green-900' :
+                  room.status === 'OD' || room.status === 'OI' ? 'bg-red-200 text-red-900' :
+                  'bg-gray-200 text-gray-900'
                 }`}>
                   {getStatusIcon(room.status)}
                   <span>{getStatusText(room.status)}</span>
                 </span>
               </div>
-              <div className="px-4 py-2 bg-gray-50 border-t border-gray-200 flex justify-between">
+              <div className={`px-4 py-2 border-t flex justify-between ${
+                room.status === 'VR' ? 'bg-green-50 border-green-200' : 
+                room.status === 'OD' || room.status === 'OI' ? 'bg-red-50 border-red-200' : 
+                'bg-gray-50 border-gray-200'
+              }`}>
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
                     handleViewDetails(room.roomId);
                   }}
-                  className="text-xs text-gray-600 hover:text-blue-600 flex items-center"
+                  className={`text-xs flex items-center ${
+                    room.status === 'VR' ? 'text-green-700 hover:text-green-900' : 
+                    room.status === 'OD' || room.status === 'OI' ? 'text-red-700 hover:text-red-900' : 
+                    'text-gray-700 hover:text-gray-900'
+                  }`}
                 >
                   <EyeIcon className="w-3 h-3 mr-1" />
                   Details
                 </button>
                 {room.status === 'OD' || room.status === 'OI' ? (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleViewBill(room.roomId);
-                    }}
-                    className="text-xs text-gray-600 hover:text-green-600 flex items-center"
-                  >
-                    <CurrencyRupeeIcon className="w-3 h-3 mr-1" />
-                    Bill
-                  </button>
+                  <>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleViewBill(room.roomId);
+                      }}
+                      className={`text-xs flex items-center ${
+                        room.status === 'VR' ? 'text-green-700 hover:text-green-900' : 
+                        room.status === 'OD' || room.status === 'OI' ? 'text-red-700 hover:text-red-900' : 
+                        'text-gray-700 hover:text-gray-900'
+                      }`}
+                    >
+                      <CurrencyRupeeIcon className="w-3 h-3 mr-1" />
+                      Bill
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleRoomShift(room);
+                      }}
+                      className={`text-xs flex items-center ${
+                        room.status === 'VR' ? 'text-green-700 hover:text-green-900' : 
+                        room.status === 'OD' || room.status === 'OI' ? 'text-red-700 hover:text-red-900' : 
+                        'text-gray-700 hover:text-gray-900'
+                      }`}
+                    >
+                      <ArrowsRightLeftIcon className="w-3 h-3 mr-1" />
+                      Shift
+                    </button>
+                  </>
                 ) : (
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
-                      handleRoomShift(room.roomId);
+                      alert('Room shifting is only available for occupied rooms.');
                     }}
-                    className="text-xs text-gray-600 hover:text-purple-600 flex items-center"
+                    className={`text-xs flex items-center cursor-not-allowed ${
+                      room.status === 'VR' ? 'text-green-500' : 
+                      room.status === 'OD' || room.status === 'OI' ? 'text-red-500' : 
+                      'text-gray-500'
+                    }`}
+                    disabled
                   >
                     <ArrowsRightLeftIcon className="w-3 h-3 mr-1" />
                     Shift
@@ -797,12 +977,7 @@ const Dashboard: React.FC = () => {
                     >
                       {checkInLoading ? 'Processing...' : 'Check-In Guest'}
                     </button>
-                    <button
-                      onClick={() => navigate('/check-in')}
-                      className="w-full bg-gradient-to-r from-gray-600 to-gray-800 text-white font-semibold py-3 px-4 rounded-lg hover:from-gray-700 hover:to-gray-900 transition-all"
-                    >
-                      Go to Full Check-In Page
-                    </button>
+                    
                   </div>
                 </div>
               </div>
@@ -903,6 +1078,105 @@ const Dashboard: React.FC = () => {
             ) : (
               <div>No details found.</div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Room Shift Modal */}
+      {showRoomShiftModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
+          <div className="bg-white rounded-xl shadow-lg p-6 w-full max-w-md">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-bold text-gray-900">Room Shift</h2>
+              <button
+                onClick={() => setShowRoomShiftModal(false)}
+                className="text-gray-400 hover:text-gray-600"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            
+            <form onSubmit={handleRoomShiftSubmit} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">From Room</label>
+                <input
+                  type="text"
+                  value={rooms.find(r => r.roomId === roomShiftData.fromRoomId)?.roomNo || ''}
+                  disabled
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">To Room <span className="text-red-500">*</span></label>
+                <select
+                  value={roomShiftData.toRoomId}
+                  onChange={(e) => setRoomShiftData({...roomShiftData, toRoomId: e.target.value})}
+                  required
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="">Select a vacant room</option>
+                  {rooms
+                    .filter(room => room.status === 'VR' && room.roomId !== roomShiftData.fromRoomId)
+                    .map(room => (
+                      <option key={room.roomId} value={room.roomId}>
+                        Room {room.roomNo} (Floor {room.floor})
+                      </option>
+                    ))
+                  }
+                </select>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Folio No</label>
+                <input
+                  type="text"
+                  value={roomShiftData.folioNo}
+                  disabled
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Guest Name</label>
+                <input
+                  type="text"
+                  value={roomShiftData.guestName}
+                  disabled
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Reason for Shift</label>
+                <textarea
+                  value={roomShiftData.reason}
+                  onChange={(e) => setRoomShiftData({...roomShiftData, reason: e.target.value})}
+                  placeholder="Enter reason for room shift (optional)"
+                  rows={3}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                ></textarea>
+              </div>
+              
+              <div className="flex justify-end space-x-3 pt-4">
+                <button
+                  type="button"
+                  onClick={() => setShowRoomShiftModal(false)}
+                  className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={roomShiftLoading}
+                  className="px-4 py-2 bg-gradient-to-r from-purple-600 to-purple-700 text-white rounded-lg hover:from-purple-700 hover:to-purple-800 disabled:opacity-50 transition-all"
+                >
+                  {roomShiftLoading ? 'Shifting...' : 'Shift Room'}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

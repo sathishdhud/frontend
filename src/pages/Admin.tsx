@@ -75,6 +75,20 @@ const Admin: React.FC = () => {
   const [settlementTypes, setSettlementTypes] = useState<SettlementType[]>([]);
   const [rooms, setRooms] = useState<Room[]>([]);
 
+  // Operations states
+  const [auditDateForm, setAuditDateForm] = useState({ confirmation: '' });
+  const [shiftForm, setShiftForm] = useState({ 
+    shiftDate: new Date().toISOString().split('T')[0], 
+    shiftNo: '1', 
+    balance: 0 
+  });
+  const [shiftCloseForm, setShiftCloseForm] = useState({ 
+    balance: 0 
+  });
+  const [operationsLoading, setOperationsLoading] = useState(false);
+  const [operationsSuccess, setOperationsSuccess] = useState('');
+  const [operationsError, setOperationsError] = useState('');
+
   useEffect(() => {
     fetchMasterData();
     fetchUsers();
@@ -162,6 +176,21 @@ const Admin: React.FC = () => {
     setTimeout(() => {
       setSuccessMessage('');
       setErrorMessage('');
+    }, 5000);
+  };
+
+  const showOperationsNotification = (message: string, isSuccess: boolean = true) => {
+    if (isSuccess) {
+      setOperationsSuccess(message);
+      setOperationsError('');
+    } else {
+      setOperationsError(message);
+      setOperationsSuccess('');
+    }
+    
+    setTimeout(() => {
+      setOperationsSuccess('');
+      setOperationsError('');
     }, 5000);
   };
 
@@ -388,7 +417,7 @@ const Admin: React.FC = () => {
       fetchMasterData();
       fetchRooms();
     } catch (error: any) {
-      showNotification(`Failed to ${editingTax || editingAccountHead || editingRoomType || editingPaymentMode || editingPlanType || editingCompany || editingNationality || editingRefMode || editingArrivalMode || editingReservationSource || editingRoom ? 'update' : 'create'} ${type}. ${error.response?.data?.message || 'Please try again.'}`, false);
+      showNotification(`Failed to ${editingTax || editingAccountHead || editingRoomType || editingPaymentMode || editingPlanType || editingCompany || editingNationality || editingRefMode || editingArrivalMode || editingReservationSource || editingSettlementType || editingRoom ? 'update' : 'create'} ${type}. ${error.response?.data?.message || 'Please try again.'}`, false);
     } finally {
       setLoading(false);
     }
@@ -604,6 +633,137 @@ const Admin: React.FC = () => {
       }
       
       showNotification(`Failed to delete ${type}. ${errorMessage}`, false);
+    }
+  };
+
+  // Operations handlers
+  const handleAuditDateChange = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setOperationsLoading(true);
+    
+    try {
+      // Confirmation must be "YES" to proceed
+      if (auditDateForm.confirmation !== 'YES') {
+        showOperationsNotification('Please confirm by typing "YES" to proceed with audit date change', false);
+        setOperationsLoading(false);
+        return;
+      }
+      
+      const response = await operationsApi.auditDateChange(auditDateForm.confirmation);
+      
+      if (response.data.success) {
+        showOperationsNotification(response.data.message || 'Audit date change processed successfully!');
+        // Reset form
+        setAuditDateForm({ confirmation: '' });
+        // Refresh data if needed
+        fetchMasterData();
+      } else {
+        showOperationsNotification(response.data.message || 'Failed to process audit date change', false);
+      }
+    } catch (error: any) {
+      console.error('Failed to process audit date change:', error);
+      // More detailed error handling
+      let errorMessage = 'Failed to process audit date change. Please try again.';
+      
+      if (error.response) {
+        if (error.response.data?.message) {
+          errorMessage = error.response.data.message;
+        } else if (error.response.status === 400) {
+          errorMessage = 'Invalid request. Please check the data and try again.';
+        } else if (error.response.status === 500) {
+          errorMessage = 'Server error. There may be database constraints preventing this operation. Please contact support.';
+        }
+      } else if (error.request) {
+        errorMessage = 'Network error. Please check your connection and try again.';
+      }
+      
+      showOperationsNotification(`Error: ${errorMessage}`, false);
+    } finally {
+      setOperationsLoading(false);
+    }
+  };
+
+  const handleShiftChange = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setOperationsLoading(true);
+    
+    try {
+      const response = await operationsApi.shiftChange(shiftForm);
+      
+      if (response.data.success) {
+        showOperationsNotification(response.data.message || 'Shift change processed successfully!');
+        // Reset form to default values
+        setShiftForm({ 
+          shiftDate: new Date().toISOString().split('T')[0], 
+          shiftNo: '1', 
+          balance: 0 
+        });
+        // Refresh data if needed
+        fetchMasterData();
+      } else {
+        showOperationsNotification(response.data.message || 'Failed to process shift change', false);
+      }
+    } catch (error: any) {
+      console.error('Failed to process shift change:', error);
+      // More detailed error handling
+      let errorMessage = 'Failed to process shift change. Please try again.';
+      
+      if (error.response) {
+        if (error.response.data?.message) {
+          errorMessage = error.response.data.message;
+        } else if (error.response.status === 400) {
+          errorMessage = 'Invalid request. Please check the data and try again.';
+        } else if (error.response.status === 500) {
+          errorMessage = 'Server error. Please contact support.';
+        }
+      } else if (error.request) {
+        errorMessage = 'Network error. Please check your connection and try again.';
+      }
+      
+      showOperationsNotification(`Error: ${errorMessage}`, false);
+    } finally {
+      setOperationsLoading(false);
+    }
+  };
+
+  const handleShiftClose = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setOperationsLoading(true);
+    
+    try {
+      const response = await operationsApi.shiftClose(shiftCloseForm);
+      
+      if (response.data.success) {
+        showOperationsNotification(response.data.message || 'Shift closed successfully!');
+        // Reset form to default values
+        setShiftCloseForm({ 
+          balance: 0 
+        });
+        // Refresh data if needed
+        fetchMasterData();
+      } else {
+        showOperationsNotification(response.data.message || 'Failed to close shift', false);
+      }
+    } catch (error: any) {
+      console.error('Failed to close shift:', error);
+      // More detailed error handling
+      let errorMessage = 'Failed to close shift. Please try again.';
+      
+      if (error.response) {
+        if (error.response.data?.message) {
+          errorMessage = error.response.data.message;
+        } else if (error.response.status === 400) {
+          errorMessage = 'Invalid request. Please check the data and try again.';
+        } else if (error.response.status === 500) {
+          errorMessage = 'Server error. Please contact support.';
+        }
+      } else if (error.request) {
+        errorMessage = 'Network error. Please check your connection and try again.';
+      }
+      
+      showOperationsNotification(`Error: ${errorMessage}`, false);
+    } finally {
+      setOperationsLoading(false);
     }
   };
 
@@ -979,141 +1139,6 @@ const Admin: React.FC = () => {
     </div>
   );
 
-  // Operations states
-  const [auditDateForm, setAuditDateForm] = useState({ confirmation: '' });
-  const [shiftForm, setShiftForm] = useState({ 
-    shiftDate: new Date().toISOString().split('T')[0], 
-    shiftNo: '1', 
-    balance: 0 
-  });
-  const [operationsLoading, setOperationsLoading] = useState(false);
-  const [operationsSuccess, setOperationsSuccess] = useState('');
-  const [operationsError, setOperationsError] = useState('');
-
-  const showOperationsNotification = (message: string, isSuccess: boolean = true) => {
-    if (isSuccess) {
-      setOperationsSuccess(message);
-      setOperationsError('');
-    } else {
-      setOperationsError(message);
-      setOperationsSuccess('');
-    }
-    
-    setTimeout(() => {
-      setOperationsSuccess('');
-      setOperationsError('');
-    }, 5000);
-  };
-
-  // Handle audit date change
-  const handleAuditDateChange = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setOperationsLoading(true);
-    
-    try {
-      // Confirmation must be "YES" to proceed
-      if (auditDateForm.confirmation !== 'YES') {
-        showOperationsNotification('Please confirm by typing "YES" to proceed with audit date change', false);
-        setOperationsLoading(false);
-        return;
-      }
-      
-      const response = await operationsApi.auditDateChange(auditDateForm.confirmation);
-      
-      if (response.data.success) {
-        showOperationsNotification(response.data.message || 'Audit date change processed successfully!');
-        // Reset form
-        setAuditDateForm({ confirmation: '' });
-        // Refresh data if needed
-        fetchMasterData();
-      } else {
-        showOperationsNotification(response.data.message || 'Failed to process audit date change', false);
-      }
-    } catch (error: any) {
-      console.error('Failed to process audit date change:', error);
-      // More detailed error handling
-      let errorMessage = 'Failed to process audit date change. Please try again.';
-      
-      if (error.response) {
-        if (error.response.data?.message) {
-          errorMessage = error.response.data.message;
-        } else if (error.response.status === 400) {
-          errorMessage = 'Invalid request. Please check the data and try again.';
-        } else if (error.response.status === 500) {
-          errorMessage = 'Server error. There may be database constraints preventing this operation. Please contact support.';
-        }
-      } else if (error.request) {
-        errorMessage = 'Network error. Please check your connection and try again.';
-      }
-      
-      showOperationsNotification(`Error: ${errorMessage}`, false);
-    } finally {
-      setOperationsLoading(false);
-    }
-  };
-
-  // Handle shift change
-  const handleShiftChange = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setOperationsLoading(true);
-    
-    try {
-      const response = await operationsApi.shiftChange(shiftForm);
-      
-      if (response.data.success) {
-        showOperationsNotification(response.data.message || 'Shift change processed successfully!');
-        // Reset form to default values
-        setShiftForm({ 
-          shiftDate: new Date().toISOString().split('T')[0], 
-          shiftNo: '1', 
-          balance: 0 
-        });
-        // Refresh data if needed
-        fetchMasterData();
-      } else {
-        showOperationsNotification(response.data.message || 'Failed to process shift change', false);
-      }
-    } catch (error: any) {
-      console.error('Failed to process shift change:', error);
-      // More detailed error handling
-      let errorMessage = 'Failed to process shift change. Please try again.';
-      
-      if (error.response) {
-        if (error.response.data?.message) {
-          errorMessage = error.response.data.message;
-        } else if (error.response.status === 400) {
-          errorMessage = 'Invalid request. Please check the data and try again.';
-        } else if (error.response.status === 500) {
-          errorMessage = 'Server error. Please contact support.';
-        }
-      } else if (error.request) {
-        errorMessage = 'Network error. Please check your connection and try again.';
-      }
-      
-      showOperationsNotification(`Error: ${errorMessage}`, false);
-    } finally {
-      setOperationsLoading(false);
-    }
-  };
-
-  const tabs = [
-    { id: 'hotelsoftusers', name: 'Hotelsoft Users', icon: UserGroupIcon },
-    { id: 'taxation', name: 'Tax Master', icon: TagIcon },
-    { id: 'accounthead', name: 'Account Head', icon: BuildingOfficeIcon },
-    { id: 'roomcreation', name: 'Room Creation', icon: BuildingOfficeIcon },
-    { id: 'roomtype', name: 'Room Type', icon: BuildingOfficeIcon },
-    { id: 'paymentmode', name: 'Payment Mode', icon: CreditCardIcon },
-    { id: 'plantype', name: 'Plan Type', icon: TagIcon },
-    { id: 'company', name: 'Company/Ott', icon: BuildingOfficeIcon },
-    { id: 'nationality', name: 'Nationality', icon: GlobeAltIcon },
-    { id: 'refmode', name: 'Ref Mode', icon: MapPinIcon },
-    { id: 'arrivalmode', name: 'Arrival Mode', icon: MapPinIcon },
-    { id: 'resvsource', name: 'Resev Source', icon: MapPinIcon },
-    { id: 'settlementtype', name: 'Settlement Type', icon: CreditCardIcon },
-    { id: 'operations', name: 'Operations', icon: CogIcon }, // Add Operations tab
-  ];
-
-  // Render Operations tab content
   const renderOperations = () => (
     <div className="space-y-6">
       {/* Operations Notifications */}
@@ -1240,7 +1265,7 @@ const Admin: React.FC = () => {
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Balance <span className="text-red-500">*</span>
+                Shift Balance <span className="text-red-500">*</span>
               </label>
               <input
                 type="number"
@@ -1249,7 +1274,7 @@ const Admin: React.FC = () => {
                 onChange={(e) => setShiftForm({ ...shiftForm, balance: parseFloat(e.target.value) || 0 })}
                 required
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
-                placeholder="0.00"
+                placeholder="Enter shift balance"
               />
             </div>
           </div>
@@ -1265,7 +1290,62 @@ const Admin: React.FC = () => {
                   <span>Processing...</span>
                 </>
               ) : (
-                <span>Record Shift Change</span>
+                <span>Change Shift</span>
+              )}
+            </button>
+          </div>
+        </form>
+      </div>
+
+      {/* Shift Close Section */}
+      <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-6 transition-all duration-300 hover:shadow-xl">
+        <h2 className="text-xl font-bold text-gray-800 mb-6 pb-2 border-b border-gray-200">Shift Close</h2>
+        <div className="bg-green-50 border-l-4 border-green-400 p-4 mb-6">
+          <div className="flex">
+            <div className="flex-shrink-0">
+              <svg className="h-5 w-5 text-green-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+              </svg>
+            </div>
+            <div className="ml-3">
+              <p className="text-sm text-green-700">
+                <strong>Automatic Shift Management:</strong> This feature automatically handles shift rotation logic. 
+                If closing a regular shift, the running shift will increment. If closing the last shift, 
+                the shift date will advance and the running shift will reset to 1.
+              </p>
+            </div>
+          </div>
+        </div>
+        <form onSubmit={handleShiftClose} className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Shift Balance <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                value={shiftCloseForm.balance}
+                onChange={(e) => setShiftCloseForm({ ...shiftCloseForm, balance: parseFloat(e.target.value) || 0 })}
+                required
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                placeholder="Enter shift balance"
+              />
+            </div>
+          </div>
+          <div className="flex justify-end">
+            <button
+              type="submit"
+              disabled={operationsLoading}
+              className="flex items-center space-x-2 px-5 py-2.5 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-lg hover:from-green-700 hover:to-green-800 disabled:opacity-50 transition-all duration-200 font-medium shadow-md hover:shadow-lg"
+            >
+              {operationsLoading ? (
+                <>
+                  <ArrowPathIcon className="w-4 h-4 animate-spin" />
+                  <span>Closing Shift...</span>
+                </>
+              ) : (
+                <span>Close Shift</span>
               )}
             </button>
           </div>
@@ -1273,6 +1353,23 @@ const Admin: React.FC = () => {
       </div>
     </div>
   );
+
+  const tabs = [
+    { id: 'hotelsoftusers', name: 'Hotelsoft Users', icon: UserGroupIcon },
+    { id: 'taxation', name: 'Tax Master', icon: TagIcon },
+    { id: 'accounthead', name: 'Account Head', icon: BuildingOfficeIcon },
+    { id: 'roomcreation', name: 'Room Creation', icon: BuildingOfficeIcon },
+    { id: 'roomtype', name: 'Room Type', icon: BuildingOfficeIcon },
+    { id: 'paymentmode', name: 'Payment Mode', icon: CreditCardIcon },
+    { id: 'plantype', name: 'Plan Type', icon: TagIcon },
+    { id: 'company', name: 'Company/Ott', icon: BuildingOfficeIcon },
+    { id: 'nationality', name: 'Nationality', icon: GlobeAltIcon },
+    { id: 'refmode', name: 'Ref Mode', icon: MapPinIcon },
+    { id: 'arrivalmode', name: 'Arrival Mode', icon: MapPinIcon },
+    { id: 'resvsource', name: 'Resev Source', icon: MapPinIcon },
+    { id: 'settlementtype', name: 'Settlement Type', icon: CreditCardIcon },
+    { id: 'operations', name: 'Operations', icon: CogIcon },
+  ];
 
   return (
     <Layout>
@@ -1343,8 +1440,8 @@ const Admin: React.FC = () => {
                 setTaxForm,
                 (e) => handleMasterDataFormSubmit(e, 'Tax', taxForm),
                 [
-                  { label: 'Tax Name', name: 'taxName', required: false },
-                  { label: 'Percentage', name: 'percentage', type: 'number', required: false }
+                  { label: 'Tax Name', name: 'taxName', required: true },
+                  { label: 'Percentage', name: 'percentage', type: 'number', required: true }
                 ],
                 !!editingTax
               )}
