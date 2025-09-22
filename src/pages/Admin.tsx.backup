@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import Layout from '../components/Layout/Layout';
+import Modal from '../components/Modal';
 import { 
   CogIcon, 
   BuildingOfficeIcon, 
@@ -16,22 +17,25 @@ import {
 } from '@heroicons/react/24/outline';
 import { masterDataApi, roomApi, operationsApi } from '../services/api';
 import { PaymentMode, RoomType, Company, PlanType, Tax, AccountHead, Nationality, RefMode, ArrivalMode, ReservationSource, User, Room, UserType, SettlementType } from '../types/api';
-import Modal from '../components/Modal';
 
 const Admin: React.FC = () => {
   const [activeTab, setActiveTab] = useState('hotelsoftusers');
   const [loading, setLoading] = useState(false);
   
-  // Modal states - replacing the previous notification states
-  const [modalOpen, setModalOpen] = useState(false);
-  const [modalTitle, setModalTitle] = useState('');
-  const [modalMessage, setModalMessage] = useState('');
-  const [modalType, setModalType] = useState<'info' | 'success' | 'warning' | 'error'>('info');
-  const [modalAction, setModalAction] = useState<(() => void) | null>(null);
-  const [showConfirmButton, setShowConfirmButton] = useState(true);
-  const [showCancelButton, setShowCancelButton] = useState(true);
-  const [confirmText, setConfirmText] = useState('Confirm');
-  const [cancelText, setCancelText] = useState('Cancel');
+  // Remove the old state variables
+  // const [successMessage, setSuccessMessage] = useState('');
+  // const [errorMessage, setErrorMessage] = useState('');
+  
+  // Modal state
+  const [modal, setModal] = useState({
+    isOpen: false,
+    title: '',
+    message: '',
+    type: 'info' as 'info' | 'success' | 'warning' | 'error',
+    onConfirm: (() => {}) as (() => void),
+    showConfirmButton: true,
+    showCancelButton: true
+  });
 
   // Form states
   const [taxForm, setTaxForm] = useState({ taxName: '', percentage: '' });
@@ -183,38 +187,38 @@ const Admin: React.FC = () => {
     }
   };
 
-  const showModal = (
-    title: string, 
-    message: string, 
-    type: 'info' | 'success' | 'warning' | 'error' = 'info',
-    action: (() => void) | null = null,
-    showConfirm: boolean = true,
-    showCancel: boolean = true,
-    confirmBtnText: string = 'Confirm',
-    cancelBtnText: string = 'Cancel'
-  ) => {
-    setModalTitle(title);
-    setModalMessage(message);
-    setModalType(type);
-    setModalAction(() => action);
-    setShowConfirmButton(showConfirm);
-    setShowCancelButton(showCancel);
-    setConfirmText(confirmBtnText);
-    setCancelText(cancelBtnText);
-    setModalOpen(true);
+  const showNotification = (message: string, isSuccess: boolean = true) => {
+    setModal({
+      isOpen: true,
+      title: isSuccess ? 'Success' : 'Error',
+      message,
+      type: isSuccess ? 'success' : 'error',
+      onConfirm: () => {},
+      showConfirmButton: false,
+      showCancelButton: false
+    });
+    
+    // Auto close after 5 seconds
+    setTimeout(() => {
+      setModal(prev => ({ ...prev, isOpen: false }));
+    }, 5000);
   };
-  
-  const showOperationsModal = (
-    title: string, 
-    message: string, 
-    type: 'info' | 'success' | 'warning' | 'error' = 'info',
-    action: (() => void) | null = null,
-    showConfirm: boolean = true,
-    showCancel: boolean = true,
-    confirmBtnText: string = 'Confirm',
-    cancelBtnText: string = 'Cancel'
-  ) => {
-    showModal(title, message, type, action, showConfirm, showCancel, confirmBtnText, cancelBtnText);
+
+  const showOperationsNotification = (message: string, isSuccess: boolean = true) => {
+    setModal({
+      isOpen: true,
+      title: isSuccess ? 'Success' : 'Error',
+      message,
+      type: isSuccess ? 'success' : 'error',
+      onConfirm: () => {},
+      showConfirmButton: false,
+      showCancelButton: false
+    });
+    
+    // Auto close after 5 seconds
+    setTimeout(() => {
+      setModal(prev => ({ ...prev, isOpen: false }));
+    }, 5000);
   };
 
   const handleUserFormSubmit = async (e: React.FormEvent) => {
@@ -231,11 +235,11 @@ const Admin: React.FC = () => {
         };
         
         await masterDataApi.updateUser(editingUser.userId, userData);
-        showModal('Success', 'User updated successfully!', 'success');
+        showNotification('User updated successfully!');
       } else {
         // Create new user
         await masterDataApi.createUser(userForm);
-        showModal('Success', 'User created successfully!', 'success');
+        showNotification('User created successfully!');
       }
       
       // Reset form
@@ -245,7 +249,7 @@ const Admin: React.FC = () => {
       // Refresh users
       fetchUsers();
     } catch (error: any) {
-      showModal('Error', `Failed to ${editingUser ? 'update' : 'create'} user. ${error.response?.data?.message || 'Please try again.'}`, 'error');
+      showNotification(`Failed to ${editingUser ? 'update' : 'create'} user. ${error.response?.data?.message || 'Please try again.'}`, false);
     } finally {
       setLoading(false);
     }
@@ -261,25 +265,13 @@ const Admin: React.FC = () => {
   };
 
   const handleDeleteUser = async (userId: string) => {
-    showModal(
-      'Confirm Delete', 
-      'Are you sure you want to delete this user?', 
-      'warning',
-      () => {
-        // This is the confirm action
-        performUserDeletion(userId);
-      },
-      true,
-      true,
-      'Delete',
-      'Cancel'
-    );
-  };
-  
-  const performUserDeletion = async (userId: string) => {
+    if (!window.confirm('Are you sure you want to delete this user?')) {
+      return;
+    }
+    
     try {
       await masterDataApi.deleteUser(userId);
-      showModal('Success', 'User deleted successfully!', 'success');
+      showNotification('User deleted successfully!');
       fetchUsers();
       
       // If we were editing this user, reset the form
@@ -288,7 +280,7 @@ const Admin: React.FC = () => {
         setEditingUser(null);
       }
     } catch (error) {
-      showModal('Error', 'Failed to delete user. Please try again.', 'error');
+      showNotification('Failed to delete user. Please try again.', false);
     }
   };
 
@@ -309,7 +301,7 @@ const Admin: React.FC = () => {
           response = editingRoom 
             ? await masterDataApi.updateRoom(editingRoom.roomId, roomData)
             : await masterDataApi.createRoom(roomData);
-          showModal('Success', `Room ${editingRoom ? 'updated' : 'created'} successfully!`, 'success');
+          showNotification(`Room ${editingRoom ? 'updated' : 'created'} successfully!`);
           setRoomForm({ roomNo: '', floor: '', roomTypeId: '' });
           setEditingRoom(null);
           fetchRooms();
@@ -399,7 +391,7 @@ const Admin: React.FC = () => {
           break;
       }
       
-      showModal('Success', `${editingTax || editingAccountHead || editingRoomType || editingPaymentMode || editingPlanType || editingCompany || editingNationality || editingRefMode || editingArrivalMode || editingReservationSource || editingSettlementType || editingRoom ? 'Updated' : 'Created'} ${type} successfully!`, 'success');
+      showNotification(`${editingTax || editingAccountHead || editingRoomType || editingPaymentMode || editingPlanType || editingCompany || editingNationality || editingRefMode || editingArrivalMode || editingReservationSource || editingSettlementType || editingRoom ? 'Updated' : 'Created'} ${type} successfully!`);
       
       // Reset form and editing state
       switch (type) {
@@ -457,7 +449,7 @@ const Admin: React.FC = () => {
       fetchMasterData();
       fetchRooms();
     } catch (error: any) {
-      showModal('Error', `Failed to ${editingTax || editingAccountHead || editingRoomType || editingPaymentMode || editingPlanType || editingCompany || editingNationality || editingRefMode || editingArrivalMode || editingReservationSource || editingSettlementType || editingRoom ? 'update' : 'create'} ${type}. ${error.response?.data?.message || 'Please try again.'}`, 'error');
+      showNotification(`Failed to ${editingTax || editingAccountHead || editingRoomType || editingPaymentMode || editingPlanType || editingCompany || editingNationality || editingRefMode || editingArrivalMode || editingReservationSource || editingSettlementType || editingRoom ? 'update' : 'create'} ${type}. ${error.response?.data?.message || 'Please try again.'}`, false);
     } finally {
       setLoading(false);
     }
@@ -533,165 +525,159 @@ const Admin: React.FC = () => {
   };
 
   const handleDeleteMasterData = async (type: string, id: string) => {
-    showModal(
-      'Confirm Delete', 
-      `Are you sure you want to delete this ${type}?`, 
-      'warning',
-      () => {
-        // This is the confirm action
-        performMasterDataDeletion(type, id);
-      },
-      true,
-      true,
-      'Delete',
-      'Cancel'
-    );
-  };
-  
-  const performMasterDataDeletion = async (type: string, id: string) => {
-    try {
-      switch (type) {
-        case 'Tax':
-          await masterDataApi.deleteTax(id);
-          break;
-        case 'Account Head':
-          await masterDataApi.deleteAccountHead(id);
-          break;
-        case 'Room Type':
-          await masterDataApi.deleteRoomType(id);
-          break;
-        case 'Payment Mode':
-          await masterDataApi.deletePaymentMode(id);
-          break;
-        case 'Plan Type':
-          await masterDataApi.deletePlanType(id);
-          break;
-        case 'Company':
-          await masterDataApi.deleteCompany(id);
-          break;
-        case 'Nationality':
-          await masterDataApi.deleteNationality(id);
-          break;
-        case 'Ref Mode':
-          await masterDataApi.deleteRefMode(id);
-          break;
-        case 'Arrival Mode':
-          await masterDataApi.deleteArrivalMode(id);
-          break;
-        case 'Reservation Source':
-          await masterDataApi.deleteReservationSource(id);
-          break;
-        case 'Settlement Type':
-          await masterDataApi.deleteSettlementType(id);
-          break;
-        case 'Room':
-          await masterDataApi.deleteRoom(id);
-          break;
-      }
-      
-      showModal('Success', `${type} deleted successfully!`, 'success');
-      fetchMasterData();
-      fetchRooms();
-      
-      // Reset editing state if we were editing the deleted item
-      switch (type) {
-        case 'Tax':
-          if (editingTax && editingTax.taxId === id) {
-            setEditingTax(null);
-            setTaxForm({ taxName: '', percentage: '' });
+    setModal({
+      isOpen: true,
+      title: 'Confirm Delete',
+      message: `Are you sure you want to delete this ${type}? This action cannot be undone.`,
+      type: 'warning',
+      onConfirm: async () => {
+        try {
+          switch (type) {
+            case 'Tax':
+              await masterDataApi.deleteTax(id);
+              break;
+            case 'Account Head':
+              await masterDataApi.deleteAccountHead(id);
+              break;
+            case 'Room Type':
+              await masterDataApi.deleteRoomType(id);
+              break;
+            case 'Payment Mode':
+              await masterDataApi.deletePaymentMode(id);
+              break;
+            case 'Plan Type':
+              await masterDataApi.deletePlanType(id);
+              break;
+            case 'Company':
+              await masterDataApi.deleteCompany(id);
+              break;
+            case 'Nationality':
+              await masterDataApi.deleteNationality(id);
+              break;
+            case 'Ref Mode':
+              await masterDataApi.deleteRefMode(id);
+              break;
+            case 'Arrival Mode':
+              await masterDataApi.deleteArrivalMode(id);
+              break;
+            case 'Reservation Source':
+              await masterDataApi.deleteReservationSource(id);
+              break;
+            case 'Settlement Type':
+              await masterDataApi.deleteSettlementType(id);
+              break;
+            case 'Room':
+              await masterDataApi.deleteRoom(id);
+              break;
           }
-          break;
-        case 'Account Head':
-          if (editingAccountHead && editingAccountHead.accHeadId === id) {
-            setEditingAccountHead(null);
-            setAccountHeadForm({ accHeadId: '', name: '', companyName: '', chequeNumber: '', date: '' });
+          
+          showNotification(`${type} deleted successfully!`);
+          fetchMasterData();
+          fetchRooms();
+          
+          // Reset editing state if we were editing the deleted item
+          switch (type) {
+            case 'Tax':
+              if (editingTax && editingTax.taxId === id) {
+                setEditingTax(null);
+                setTaxForm({ taxName: '', percentage: '' });
+              }
+              break;
+            case 'Account Head':
+              if (editingAccountHead && editingAccountHead.accHeadId === id) {
+                setEditingAccountHead(null);
+                setAccountHeadForm({ accHeadId: '', name: '', companyName: '', chequeNumber: '', date: '' });
+              }
+              break;
+            case 'Room Type':
+              if (editingRoomType && editingRoomType.typeId === id) {
+                setEditingRoomType(null);
+                setRoomTypeForm({ typeName: '', noOfRooms: '' });
+              }
+              break;
+            case 'Payment Mode':
+              if (editingPaymentMode && editingPaymentMode.id === id) {
+                setEditingPaymentMode(null);
+                setPaymentModeForm({ id: '', name: '' });
+              }
+              break;
+            case 'Plan Type':
+              if (editingPlanType && editingPlanType.planId === id) {
+                setEditingPlanType(null);
+                setPlanTypeForm({ planName: '', discountPercentage: '' });
+              }
+              break;
+            case 'Company':
+              if (editingCompany && editingCompany.companyId === id) {
+                setEditingCompany(null);
+                setCompanyForm({ companyName: '', address1: '', address2: '', address3: '', gstNumber: '' });
+              }
+              break;
+            case 'Nationality':
+              if (editingNationality && editingNationality.id === id) {
+                setEditingNationality(null);
+                setNationalityForm({ nationality: '' });
+              }
+              break;
+            case 'Ref Mode':
+              if (editingRefMode && editingRefMode.id === id) {
+                setEditingRefMode(null);
+                setRefModeForm({ refMode: '' });
+              }
+              break;
+            case 'Arrival Mode':
+              if (editingArrivalMode && editingArrivalMode.id === id) {
+                setEditingArrivalMode(null);
+                setArrivalModeForm({ arrivalMode: '' });
+              }
+              break;
+            case 'Reservation Source':
+              if (editingReservationSource && editingReservationSource.id === id) {
+                setEditingReservationSource(null);
+                setReservationSourceForm({ resvSource: '' });
+              }
+              break;
+            case 'Settlement Type':
+              if (editingSettlementType && editingSettlementType.id === id) {
+                setEditingSettlementType(null);
+                setSettlementTypeForm({ id: '', name: '' });
+              }
+              break;
+            case 'Room':
+              if (editingRoom && editingRoom.roomId === id) {
+                setEditingRoom(null);
+                setRoomForm({ roomNo: '', floor: '', roomTypeId: '' });
+              }
+              break;
           }
-          break;
-        case 'Room Type':
-          if (editingRoomType && editingRoomType.typeId === id) {
-            setEditingRoomType(null);
-            setRoomTypeForm({ typeName: '', noOfRooms: '' });
+        } catch (error: any) {
+          console.error(`Failed to delete ${type}:`, error);
+          let errorMessage = 'Please try again.';
+          
+          // Handle specific error cases
+          if (error.response) {
+            // Server responded with error status
+            if (error.response.status === 409) {
+              errorMessage = 'This item is currently in use and cannot be deleted.';
+            } else if (error.response.data?.message) {
+              errorMessage = error.response.data.message;
+            } else {
+              errorMessage = `Server error (${error.response.status}). Please try again.`;
+            }
+          } else if (error.request) {
+            // Request was made but no response received
+            errorMessage = 'Network error. Please check your connection and try again.';
+          } else {
+            // Something else happened
+            errorMessage = error.message || errorMessage;
           }
-          break;
-        case 'Payment Mode':
-          if (editingPaymentMode && editingPaymentMode.id === id) {
-            setEditingPaymentMode(null);
-            setPaymentModeForm({ id: '', name: '' });
-          }
-          break;
-        case 'Plan Type':
-          if (editingPlanType && editingPlanType.planId === id) {
-            setEditingPlanType(null);
-            setPlanTypeForm({ planName: '', discountPercentage: '' });
-          }
-          break;
-        case 'Company':
-          if (editingCompany && editingCompany.companyId === id) {
-            setEditingCompany(null);
-            setCompanyForm({ companyName: '', address1: '', address2: '', address3: '', gstNumber: '' });
-          }
-          break;
-        case 'Nationality':
-          if (editingNationality && editingNationality.id === id) {
-            setEditingNationality(null);
-            setNationalityForm({ nationality: '' });
-          }
-          break;
-        case 'Ref Mode':
-          if (editingRefMode && editingRefMode.id === id) {
-            setEditingRefMode(null);
-            setRefModeForm({ refMode: '' });
-          }
-          break;
-        case 'Arrival Mode':
-          if (editingArrivalMode && editingArrivalMode.id === id) {
-            setEditingArrivalMode(null);
-            setArrivalModeForm({ arrivalMode: '' });
-          }
-          break;
-        case 'Reservation Source':
-          if (editingReservationSource && editingReservationSource.id === id) {
-            setEditingReservationSource(null);
-            setReservationSourceForm({ resvSource: '' });
-          }
-          break;
-        case 'Settlement Type':
-          if (editingSettlementType && editingSettlementType.id === id) {
-            setEditingSettlementType(null);
-            setSettlementTypeForm({ id: '', name: '' });
-          }
-          break;
-        case 'Room':
-          if (editingRoom && editingRoom.roomId === id) {
-            setEditingRoom(null);
-            setRoomForm({ roomNo: '', floor: '', roomTypeId: '' });
-          }
-          break;
-      }
-    } catch (error: any) {
-      console.error(`Failed to delete ${type}:`, error);
-      let errorMessage = 'Please try again.';
-      
-      // Handle specific error cases
-      if (error.response) {
-        // Server responded with error status
-        if (error.response.status === 409) {
-          errorMessage = 'This item is currently in use and cannot be deleted.';
-        } else if (error.response.data?.message) {
-          errorMessage = error.response.data.message;
-        } else {
-          errorMessage = `Server error (${error.response.status}). Please try again.`;
+          
+          showNotification(`Failed to delete ${type}. ${errorMessage}`, false);
         }
-      } else if (error.request) {
-        // Request was made but no response received
-        errorMessage = 'Network error. Please check your connection and try again.';
-      } else {
-        // Something else happened
-        errorMessage = error.message || errorMessage;
-      }
-      
-      showModal('Error', `Failed to delete ${type}. ${errorMessage}`, 'error');
-    }
+      },
+      showConfirmButton: true,
+      showCancelButton: true
+    });
   };
 
   // Operations handlers
@@ -702,7 +688,7 @@ const Admin: React.FC = () => {
     try {
       // Confirmation must be "YES" to proceed
       if (auditDateForm.confirmation !== 'YES') {
-        showOperationsModal('Confirmation Required', 'Please confirm by typing "YES" to proceed with audit date change', 'warning');
+        showOperationsNotification('Please confirm by typing "YES" to proceed with audit date change', false);
         setOperationsLoading(false);
         return;
       }
@@ -710,13 +696,13 @@ const Admin: React.FC = () => {
       const response = await operationsApi.auditDateChange(auditDateForm.confirmation);
       
       if (response.data.success) {
-        showOperationsModal('Success', response.data.message || 'Audit date change processed successfully!', 'success');
+        showOperationsNotification(response.data.message || 'Audit date change processed successfully!');
         // Reset form
         setAuditDateForm({ confirmation: '' });
         // Refresh data if needed
         fetchMasterData();
       } else {
-        showOperationsModal('Error', response.data.message || 'Failed to process audit date change', 'error');
+        showOperationsNotification(response.data.message || 'Failed to process audit date change', false);
       }
     } catch (error: any) {
       console.error('Failed to process audit date change:', error);
@@ -735,7 +721,7 @@ const Admin: React.FC = () => {
         errorMessage = 'Network error. Please check your connection and try again.';
       }
       
-      showOperationsModal('Error', `Error: ${errorMessage}`, 'error');
+      showOperationsNotification(`Error: ${errorMessage}`, false);
     } finally {
       setOperationsLoading(false);
     }
@@ -749,7 +735,7 @@ const Admin: React.FC = () => {
       const response = await operationsApi.shiftChange(shiftForm);
       
       if (response.data.success) {
-        showOperationsModal('Success', response.data.message || 'Shift change processed successfully!', 'success');
+        showOperationsNotification(response.data.message || 'Shift change processed successfully!');
         // Reset form to default values
         setShiftForm({ 
           shiftDate: new Date().toISOString().split('T')[0], 
@@ -759,7 +745,7 @@ const Admin: React.FC = () => {
         // Refresh data if needed
         fetchMasterData();
       } else {
-        showOperationsModal('Error', response.data.message || 'Failed to process shift change', 'error');
+        showOperationsNotification(response.data.message || 'Failed to process shift change', false);
       }
     } catch (error: any) {
       console.error('Failed to process shift change:', error);
@@ -778,13 +764,833 @@ const Admin: React.FC = () => {
         errorMessage = 'Network error. Please check your connection and try again.';
       }
       
-      showOperationsModal('Error', `Error: ${errorMessage}`, 'error');
+      showOperationsNotification(`Error: ${errorMessage}`, false);
     } finally {
       setOperationsLoading(false);
     }
   };
 
-  const handleShiftClose = async (e: React.FormEvent) => {
+  return (
+    <Layout>
+      <div className="flex flex-col items-center justify-center min-h-screen">
+        <div className="w-full max-w-4xl">
+          <div className="flex justify-between items-center mb-4">
+            <h1 className="text-2xl font-bold">Admin Panel</h1>
+            <div className="flex space-x-2">
+              <button className="btn btn-primary" onClick={() => setActiveTab('hotelsoftusers')}>Hotelsoft Users</button>
+              <button className="btn btn-primary" onClick={() => setActiveTab('masterdata')}>Master Data</button>
+              <button className="btn btn-primary" onClick={() => setActiveTab('operations')}>Operations</button>
+            </div>
+          </div>
+          <div className="border p-4 rounded-lg">
+            {activeTab === 'hotelsoftusers' && (
+              <div>
+                <h2 className="text-xl font-bold mb-4">Hotelsoft Users</h2>
+                <form onSubmit={handleUserFormSubmit} className="mb-4">
+                  <div className="mb-2">
+                    <label className="block text-sm font-medium text-gray-700">User Name</label>
+                    <input 
+                      type="text" 
+                      value={userForm.userName} 
+                      onChange={(e) => setUserForm({ ...userForm, userName: e.target.value })}
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                      required
+                    />
+                  </div>
+                  <div className="mb-2">
+                    <label className="block text-sm font-medium text-gray-700">User Type ID</label>
+                    <input 
+                      type="text" 
+                      value={userForm.userTypeId} 
+                      onChange={(e) => setUserForm({ ...userForm, userTypeId: e.target.value })}
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                      required
+                    />
+                  </div>
+                  <div className="mb-2">
+                    <label className="block text-sm font-medium text-gray-700">Password</label>
+                    <input 
+                      type="password" 
+                      value={userForm.password} 
+                      onChange={(e) => setUserForm({ ...userForm, password: e.target.value })}
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                    />
+                  </div>
+                  <button type="submit" className="btn btn-primary">
+                    {editingUser ? 'Update User' : 'Create User'}
+                  </button>
+                </form>
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User Name</th>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User Type ID</th>
+                      <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {users.map(user => (
+                      <tr key={user.userId}>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{user.userName}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{user.userTypeId}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          <button className="btn btn-secondary mr-2" onClick={() => handleEditUser(user)}>Edit</button>
+                          <button className="btn btn-danger" onClick={() => handleDeleteUser(user.userId)}>Delete</button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            {activeTab === 'masterdata' && (
+              <div>
+                <h2 className="text-xl font-bold mb-4">Master Data</h2>
+                <div className="mb-4">
+                  <h3 className="text-lg font-bold mb-2">Room</h3>
+                  <form onSubmit={(e) => handleMasterDataFormSubmit(e, 'Room', roomForm)} className="mb-4">
+                    <div className="mb-2">
+                      <label className="block text-sm font-medium text-gray-700">Room No</label>
+                      <input 
+                        type="text" 
+                        value={roomForm.roomNo} 
+                        onChange={(e) => setRoomForm({ ...roomForm, roomNo: e.target.value })}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                        required
+                      />
+                    </div>
+                    <div className="mb-2">
+                      <label className="block text-sm font-medium text-gray-700">Floor</label>
+                      <input 
+                        type="text" 
+                        value={roomForm.floor} 
+                        onChange={(e) => setRoomForm({ ...roomForm, floor: e.target.value })}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                        required
+                      />
+                    </div>
+                    <div className="mb-2">
+                      <label className="block text-sm font-medium text-gray-700">Room Type ID</label>
+                      <input 
+                        type="text" 
+                        value={roomForm.roomTypeId} 
+                        onChange={(e) => setRoomForm({ ...roomForm, roomTypeId: e.target.value })}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                        required
+                      />
+                    </div>
+                    <button type="submit" className="btn btn-primary">
+                      {editingRoom ? 'Update Room' : 'Create Room'}
+                    </button>
+                  </form>
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Room No</th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Floor</th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Room Type ID</th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {rooms.map(room => (
+                        <tr key={room.roomId}>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{room.roomNo}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{room.floor}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{room.roomTypeId}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            <button className="btn btn-secondary mr-2" onClick={() => handleEditMasterData('Room', room)}>Edit</button>
+                            <button className="btn btn-danger" onClick={() => handleDeleteMasterData('Room', room.roomId)}>Delete</button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="mb-4">
+                  <h3 className="text-lg font-bold mb-2">Tax</h3>
+                  <form onSubmit={(e) => handleMasterDataFormSubmit(e, 'Tax', taxForm)} className="mb-4">
+                    <div className="mb-2">
+                      <label className="block text-sm font-medium text-gray-700">Tax Name</label>
+                      <input 
+                        type="text" 
+                        value={taxForm.taxName} 
+                        onChange={(e) => setTaxForm({ ...taxForm, taxName: e.target.value })}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                        required
+                      />
+                    </div>
+                    <div className="mb-2">
+                      <label className="block text-sm font-medium text-gray-700">Percentage</label>
+                      <input 
+                        type="text" 
+                        value={taxForm.percentage} 
+                        onChange={(e) => setTaxForm({ ...taxForm, percentage: e.target.value })}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                        required
+                      />
+                    </div>
+                    <button type="submit" className="btn btn-primary">
+                      {editingTax ? 'Update Tax' : 'Create Tax'}
+                    </button>
+                  </form>
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tax Name</th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Percentage</th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {taxes.map(tax => (
+                        <tr key={tax.taxId}>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{tax.taxName}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{tax.percentage}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            <button className="btn btn-secondary mr-2" onClick={() => handleEditMasterData('Tax', tax)}>Edit</button>
+                            <button className="btn btn-danger" onClick={() => handleDeleteMasterData('Tax', tax.taxId)}>Delete</button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="mb-4">
+                  <h3 className="text-lg font-bold mb-2">Account Head</h3>
+                  <form onSubmit={(e) => handleMasterDataFormSubmit(e, 'Account Head', accountHeadForm)} className="mb-4">
+                    <div className="mb-2">
+                      <label className="block text-sm font-medium text-gray-700">Account Head ID</label>
+                      <input 
+                        type="text" 
+                        value={accountHeadForm.accHeadId} 
+                        onChange={(e) => setAccountHeadForm({ ...accountHeadForm, accHeadId: e.target.value })}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                        required
+                      />
+                    </div>
+                    <div className="mb-2">
+                      <label className="block text-sm font-medium text-gray-700">Name</label>
+                      <input 
+                        type="text" 
+                        value={accountHeadForm.name} 
+                        onChange={(e) => setAccountHeadForm({ ...accountHeadForm, name: e.target.value })}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                        required
+                      />
+                    </div>
+                    <div className="mb-2">
+                      <label className="block text-sm font-medium text-gray-700">Company Name</label>
+                      <input 
+                        type="text" 
+                        value={accountHeadForm.companyName} 
+                        onChange={(e) => setAccountHeadForm({ ...accountHeadForm, companyName: e.target.value })}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                      />
+                    </div>
+                    <div className="mb-2">
+                      <label className="block text-sm font-medium text-gray-700">Cheque Number</label>
+                      <input 
+                        type="text" 
+                        value={accountHeadForm.chequeNumber} 
+                        onChange={(e) => setAccountHeadForm({ ...accountHeadForm, chequeNumber: e.target.value })}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                      />
+                    </div>
+                    <div className="mb-2">
+                      <label className="block text-sm font-medium text-gray-700">Date</label>
+                      <input 
+                        type="date" 
+                        value={accountHeadForm.date} 
+                        onChange={(e) => setAccountHeadForm({ ...accountHeadForm, date: e.target.value })}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                      />
+                    </div>
+                    <button type="submit" className="btn btn-primary">
+                      {editingAccountHead ? 'Update Account Head' : 'Create Account Head'}
+                    </button>
+                  </form>
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Account Head ID</th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Company Name</th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cheque Number</th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {accountHeads.map(accountHead => (
+                        <tr key={accountHead.accHeadId}>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{accountHead.accHeadId}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{accountHead.name}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{accountHead.companyName}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{accountHead.chequeNumber}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{accountHead.date}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            <button className="btn btn-secondary mr-2" onClick={() => handleEditMasterData('Account Head', accountHead)}>Edit</button>
+                            <button className="btn btn-danger" onClick={() => handleDeleteMasterData('Account Head', accountHead.accHeadId)}>Delete</button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="mb-4">
+                  <h3 className="text-lg font-bold mb-2">Room Type</h3>
+                  <form onSubmit={(e) => handleMasterDataFormSubmit(e, 'Room Type', roomTypeForm)} className="mb-4">
+                    <div className="mb-2">
+                      <label className="block text-sm font-medium text-gray-700">Type Name</label>
+                      <input 
+                        type="text" 
+                        value={roomTypeForm.typeName} 
+                        onChange={(e) => setRoomTypeForm({ ...roomTypeForm, typeName: e.target.value })}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                        required
+                      />
+                    </div>
+                    <div className="mb-2">
+                      <label className="block text-sm font-medium text-gray-700">No of Rooms</label>
+                      <input 
+                        type="text" 
+                        value={roomTypeForm.noOfRooms} 
+                        onChange={(e) => setRoomTypeForm({ ...roomTypeForm, noOfRooms: e.target.value })}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                        required
+                      />
+                    </div>
+                    <button type="submit" className="btn btn-primary">
+                      {editingRoomType ? 'Update Room Type' : 'Create Room Type'}
+                    </button>
+                  </form>
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type Name</th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">No of Rooms</th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {roomTypes.map(roomType => (
+                        <tr key={roomType.typeId}>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{roomType.typeName}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{roomType.noOfRooms}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            <button className="btn btn-secondary mr-2" onClick={() => handleEditMasterData('Room Type', roomType)}>Edit</button>
+                            <button className="btn btn-danger" onClick={() => handleDeleteMasterData('Room Type', roomType.typeId)}>Delete</button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="mb-4">
+                  <h3 className="text-lg font-bold mb-2">Payment Mode</h3>
+                  <form onSubmit={(e) => handleMasterDataFormSubmit(e, 'Payment Mode', paymentModeForm)} className="mb-4">
+                    <div className="mb-2">
+                      <label className="block text-sm font-medium text-gray-700">ID</label>
+                      <input 
+                        type="text" 
+                        value={paymentModeForm.id} 
+                        onChange={(e) => setPaymentModeForm({ ...paymentModeForm, id: e.target.value })}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                        required
+                      />
+                    </div>
+                    <div className="mb-2">
+                      <label className="block text-sm font-medium text-gray-700">Name</label>
+                      <input 
+                        type="text" 
+                        value={paymentModeForm.name} 
+                        onChange={(e) => setPaymentModeForm({ ...paymentModeForm, name: e.target.value })}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                        required
+                      />
+                    </div>
+                    <button type="submit" className="btn btn-primary">
+                      {editingPaymentMode ? 'Update Payment Mode' : 'Create Payment Mode'}
+                    </button>
+                  </form>
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {paymentModes.map(paymentMode => (
+                        <tr key={paymentMode.id}>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{paymentMode.id}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{paymentMode.name}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            <button className="btn btn-secondary mr-2" onClick={() => handleEditMasterData('Payment Mode', paymentMode)}>Edit</button>
+                            <button className="btn btn-danger" onClick={() => handleDeleteMasterData('Payment Mode', paymentMode.id)}>Delete</button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="mb-4">
+                  <h3 className="text-lg font-bold mb-2">Plan Type</h3>
+                  <form onSubmit={(e) => handleMasterDataFormSubmit(e, 'Plan Type', planTypeForm)} className="mb-4">
+                    <div className="mb-2">
+                      <label className="block text-sm font-medium text-gray-700">Plan Name</label>
+                      <input 
+                        type="text" 
+                        value={planTypeForm.planName} 
+                        onChange={(e) => setPlanTypeForm({ ...planTypeForm, planName: e.target.value })}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                        required
+                      />
+                    </div>
+                    <div className="mb-2">
+                      <label className="block text-sm font-medium text-gray-700">Discount Percentage</label>
+                      <input 
+                        type="text" 
+                        value={planTypeForm.discountPercentage} 
+                        onChange={(e) => setPlanTypeForm({ ...planTypeForm, discountPercentage: e.target.value })}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                        required
+                      />
+                    </div>
+                    <button type="submit" className="btn btn-primary">
+                      {editingPlanType ? 'Update Plan Type' : 'Create Plan Type'}
+                    </button>
+                  </form>
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Plan Name</th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Discount Percentage</th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {planTypes.map(planType => (
+                        <tr key={planType.planId}>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{planType.planName}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{planType.discountPercentage}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            <button className="btn btn-secondary mr-2" onClick={() => handleEditMasterData('Plan Type', planType)}>Edit</button>
+                            <button className="btn btn-danger" onClick={() => handleDeleteMasterData('Plan Type', planType.planId)}>Delete</button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="mb-4">
+                  <h3 className="text-lg font-bold mb-2">Company</h3>
+                  <form onSubmit={(e) => handleMasterDataFormSubmit(e, 'Company', companyForm)} className="mb-4">
+                    <div className="mb-2">
+                      <label className="block text-sm font-medium text-gray-700">Company Name</label>
+                      <input 
+                        type="text" 
+                        value={companyForm.companyName} 
+                        onChange={(e) => setCompanyForm({ ...companyForm, companyName: e.target.value })}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                        required
+                      />
+                    </div>
+                    <div className="mb-2">
+                      <label className="block text-sm font-medium text-gray-700">Address 1</label>
+                      <input 
+                        type="text" 
+                        value={companyForm.address1} 
+                        onChange={(e) => setCompanyForm({ ...companyForm, address1: e.target.value })}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                      />
+                    </div>
+                    <div className="mb-2">
+                      <label className="block text-sm font-medium text-gray-700">Address 2</label>
+                      <input 
+                        type="text" 
+                        value={companyForm.address2} 
+                        onChange={(e) => setCompanyForm({ ...companyForm, address2: e.target.value })}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                      />
+                    </div>
+                    <div className="mb-2">
+                      <label className="block text-sm font-medium text-gray-700">Address 3</label>
+                      <input 
+                        type="text" 
+                        value={companyForm.address3} 
+                        onChange={(e) => setCompanyForm({ ...companyForm, address3: e.target.value })}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                      />
+                    </div>
+                    <div className="mb-2">
+                      <label className="block text-sm font-medium text-gray-700">GST Number</label>
+                      <input 
+                        type="text" 
+                        value={companyForm.gstNumber} 
+                        onChange={(e) => setCompanyForm({ ...companyForm, gstNumber: e.target.value })}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                      />
+                    </div>
+                    <button type="submit" className="btn btn-primary">
+                      {editingCompany ? 'Update Company' : 'Create Company'}
+                    </button>
+                  </form>
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Company Name</th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Address 1</th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Address 2</th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Address 3</th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">GST Number</th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {companies.map(company => (
+                        <tr key={company.companyId}>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{company.companyName}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{company.address1}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{company.address2}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{company.address3}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{company.gstNumber}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            <button className="btn btn-secondary mr-2" onClick={() => handleEditMasterData('Company', company)}>Edit</button>
+                            <button className="btn btn-danger" onClick={() => handleDeleteMasterData('Company', company.companyId)}>Delete</button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="mb-4">
+                  <h3 className="text-lg font-bold mb-2">Nationality</h3>
+                  <form onSubmit={(e) => handleMasterDataFormSubmit(e, 'Nationality', nationalityForm)} className="mb-4">
+                    <div className="mb-2">
+                      <label className="block text-sm font-medium text-gray-700">Nationality</label>
+                      <input 
+                        type="text" 
+                        value={nationalityForm.nationality} 
+                        onChange={(e) => setNationalityForm({ ...nationalityForm, nationality: e.target.value })}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                        required
+                      />
+                    </div>
+                    <button type="submit" className="btn btn-primary">
+                      {editingNationality ? 'Update Nationality' : 'Create Nationality'}
+                    </button>
+                  </form>
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nationality</th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {nationalities.map(nationality => (
+                        <tr key={nationality.id}>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{nationality.nationality}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            <button className="btn btn-secondary mr-2" onClick={() => handleEditMasterData('Nationality', nationality)}>Edit</button>
+                            <button className="btn btn-danger" onClick={() => handleDeleteMasterData('Nationality', nationality.id)}>Delete</button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="mb-4">
+                  <h3 className="text-lg font-bold mb-2">Ref Mode</h3>
+                  <form onSubmit={(e) => handleMasterDataFormSubmit(e, 'Ref Mode', refModeForm)} className="mb-4">
+                    <div className="mb-2">
+                      <label className="block text-sm font-medium text-gray-700">Ref Mode</label>
+                      <input 
+                        type="text" 
+                        value={refModeForm.refMode} 
+                        onChange={(e) => setRefModeForm({ ...refModeForm, refMode: e.target.value })}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                        required
+                      />
+                    </div>
+                    <button type="submit" className="btn btn-primary">
+                      {editingRefMode ? 'Update Ref Mode' : 'Create Ref Mode'}
+                    </button>
+                  </form>
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ref Mode</th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {refModes.map(refMode => (
+                        <tr key={refMode.id}>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{refMode.refMode}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            <button className="btn btn-secondary mr-2" onClick={() => handleEditMasterData('Ref Mode', refMode)}>Edit</button>
+                            <button className="btn btn-danger" onClick={() => handleDeleteMasterData('Ref Mode', refMode.id)}>Delete</button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="mb-4">
+                  <h3 className="text-lg font-bold mb-2">Arrival Mode</h3>
+                  <form onSubmit={(e) => handleMasterDataFormSubmit(e, 'Arrival Mode', arrivalModeForm)} className="mb-4">
+                    <div className="mb-2">
+                      <label className="block text-sm font-medium text-gray-700">Arrival Mode</label>
+                      <input 
+                        type="text" 
+                        value={arrivalModeForm.arrivalMode} 
+                        onChange={(e) => setArrivalModeForm({ ...arrivalModeForm, arrivalMode: e.target.value })}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                        required
+                      />
+                    </div>
+                    <button type="submit" className="btn btn-primary">
+                      {editingArrivalMode ? 'Update Arrival Mode' : 'Create Arrival Mode'}
+                    </button>
+                  </form>
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Arrival Mode</th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {arrivalModes.map(arrivalMode => (
+                        <tr key={arrivalMode.id}>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{arrivalMode.arrivalMode}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            <button className="btn btn-secondary mr-2" onClick={() => handleEditMasterData('Arrival Mode', arrivalMode)}>Edit</button>
+                            <button className="btn btn-danger" onClick={() => handleDeleteMasterData('Arrival Mode', arrivalMode.id)}>Delete</button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="mb-4">
+                  <h3 className="text-lg font-bold mb-2">Reservation Source</h3>
+                  <form onSubmit={(e) => handleMasterDataFormSubmit(e, 'Reservation Source', reservationSourceForm)} className="mb-4">
+                    <div className="mb-2">
+                      <label className="block text-sm font-medium text-gray-700">Reservation Source</label>
+                      <input 
+                        type="text" 
+                        value={reservationSourceForm.resvSource} 
+                        onChange={(e) => setReservationSourceForm({ ...reservationSourceForm, resvSource: e.target.value })}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                        required
+                      />
+                    </div>
+                    <button type="submit" className="btn btn-primary">
+                      {editingReservationSource ? 'Update Reservation Source' : 'Create Reservation Source'}
+                    </button>
+                  </form>
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Reservation Source</th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {reservationSources.map(reservationSource => (
+                        <tr key={reservationSource.id}>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{reservationSource.resvSource}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            <button className="btn btn-secondary mr-2" onClick={() => handleEditMasterData('Reservation Source', reservationSource)}>Edit</button>
+                            <button className="btn btn-danger" onClick={() => handleDeleteMasterData('Reservation Source', reservationSource.id)}>Delete</button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div className="mb-4">
+                  <h3 className="text-lg font-bold mb-2">Settlement Type</h3>
+                  <form onSubmit={(e) => handleMasterDataFormSubmit(e, 'Settlement Type', settlementTypeForm)} className="mb-4">
+                    <div className="mb-2">
+                      <label className="block text-sm font-medium text-gray-700">ID</label>
+                      <input 
+                        type="text" 
+                        value={settlementTypeForm.id} 
+                        onChange={(e) => setSettlementTypeForm({ ...settlementTypeForm, id: e.target.value })}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                        required
+                      />
+                    </div>
+                    <div className="mb-2">
+                      <label className="block text-sm font-medium text-gray-700">Name</label>
+                      <input 
+                        type="text" 
+                        value={settlementTypeForm.name} 
+                        onChange={(e) => setSettlementTypeForm({ ...settlementTypeForm, name: e.target.value })}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                        required
+                      />
+                    </div>
+                    <button type="submit" className="btn btn-primary">
+                      {editingSettlementType ? 'Update Settlement Type' : 'Create Settlement Type'}
+                    </button>
+                  </form>
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                        <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {settlementTypes.map(settlementType => (
+                        <tr key={settlementType.id}>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{settlementType.id}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{settlementType.name}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            <button className="btn btn-secondary mr-2" onClick={() => handleEditMasterData('Settlement Type', settlementType)}>Edit</button>
+                            <button className="btn btn-danger" onClick={() => handleDeleteMasterData('Settlement Type', settlementType.id)}>Delete</button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+            {activeTab === 'operations' && (
+              <div>
+                <h2 className="text-xl font-bold mb-4">Operations</h2>
+                <div className="mb-4">
+                  <h3 className="text-lg font-bold mb-2">Audit Date Change</h3>
+                  <form onSubmit={handleAuditDateChange} className="mb-4">
+                    <div className="mb-2">
+                      <label className="block text-sm font-medium text-gray-700">Confirmation</label>
+                      <input 
+                        type="text" 
+                        value={auditDateForm.confirmation} 
+                        onChange={(e) => setAuditDateForm({ confirmation: e.target.value })}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                        required
+                      />
+                    </div>
+                    <button type="submit" className="btn btn-primary">
+                      Process Audit Date Change
+                    </button>
+                  </form>
+                </div>
+                <div className="mb-4">
+                  <h3 className="text-lg font-bold mb-2">Shift Change</h3>
+                  <form onSubmit={handleShiftChange} className="mb-4">
+                    <div className="mb-2">
+                      <label className="block text-sm font-medium text-gray-700">Shift Date</label>
+                      <input 
+                        type="date" 
+                        value={shiftForm.shiftDate} 
+                        onChange={(e) => setShiftForm({ ...shiftForm, shiftDate: e.target.value })}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                        required
+                      />
+                    </div>
+                    <div className="mb-2">
+                      <label className="block text-sm font-medium text-gray-700">Shift No</label>
+                      <input 
+                        type="text" 
+                        value={shiftForm.shiftNo} 
+                        onChange={(e) => setShiftForm({ ...shiftForm, shiftNo: e.target.value })}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                        required
+                      />
+                    </div>
+                    <div className="mb-2">
+                      <label className="block text-sm font-medium text-gray-700">Balance</label>
+                      <input 
+                        type="text" 
+                        value={shiftForm.balance} 
+                        onChange={(e) => setShiftForm({ ...shiftForm, balance: parseFloat(e.target.value) })}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                        required
+                      />
+                    </div>
+                    <button type="submit" className="btn btn-primary">
+                      Process Shift Change
+                    </button>
+                  </form>
+                </div>
+                <div className="mb-4">
+                  <h3 className="text-lg font-bold mb-2">Shift Close</h3>
+                  <form onSubmit={handleShiftClose} className="mb-4">
+                    <div className="mb-2">
+                      <label className="block text-sm font-medium text-gray-700">Balance</label>
+                      <input 
+                        type="text" 
+                        value={shiftCloseForm.balance} 
+                        onChange={(e) => setShiftCloseForm({ ...shiftCloseForm, balance: parseFloat(e.target.value) })}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                        required
+                      />
+                    </div>
+                    <div className="mb-2">
+                      <label className="block text-sm font-medium text-gray-700">Opening Balance</label>
+                      <input 
+                        type="text" 
+                        value={shiftCloseForm.openingBalance} 
+                        onChange={(e) => setShiftCloseForm({ ...shiftCloseForm, openingBalance: parseFloat(e.target.value) })}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                        required
+                      />
+                    </div>
+                    <div className="mb-2">
+                      <label className="block text-sm font-medium text-gray-700">Total Income</label>
+                      <input 
+                        type="text" 
+                        value={shiftCloseForm.totalIncome} 
+                        onChange={(e) => setShiftCloseForm({ ...shiftCloseForm, totalIncome: parseFloat(e.target.value) })}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                        required
+                      />
+                    </div>
+                    <div className="mb-2">
+                      <label className="block text-sm font-medium text-gray-700">Total Expense</label>
+                      <input 
+                        type="text" 
+                        value={shiftCloseForm.totalExpense} 
+                        onChange={(e) => setShiftCloseForm({ ...shiftCloseForm, totalExpense: parseFloat(e.target.value) })}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                        required
+                      />
+                    </div>
+                    <button type="submit" className="btn btn-primary">
+                      Process Shift Close
+                    </button>
+                  </form>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+      <Modal 
+        isOpen={modal.isOpen} 
+        onClose={() => setModal(prev => ({ ...prev, isOpen: false }))}
+        title={modal.title} 
+        type={modal.type} 
+        onConfirm={modal.onConfirm} 
+        showConfirmButton={modal.showConfirmButton} 
+        showCancelButton={modal.showCancelButton} 
+      >
+        {modal.message}
+      </Modal>
+    </Layout>
+  );
+};
     e.preventDefault();
     setOperationsLoading(true);
     
@@ -800,7 +1606,7 @@ const Admin: React.FC = () => {
       });
       
       if (response.data.success) {
-        showOperationsModal('Success', response.data.message || 'Shift closed successfully!', 'success');
+        showOperationsNotification(response.data.message || 'Shift closed successfully!');
         // Reset form to default values
         setShiftCloseForm({ 
           balance: 0,
@@ -811,7 +1617,7 @@ const Admin: React.FC = () => {
         // Refresh data if needed
         fetchMasterData();
       } else {
-        showOperationsModal('Error', response.data.message || 'Failed to close shift', 'error');
+        showOperationsNotification(response.data.message || 'Failed to close shift', false);
       }
     } catch (error: any) {
       console.error('Failed to close shift:', error);
@@ -830,7 +1636,7 @@ const Admin: React.FC = () => {
         errorMessage = 'Network error. Please check your connection and try again.';
       }
       
-      showOperationsModal('Error', `Error: ${errorMessage}`, 'error');
+      showOperationsNotification(`Error: ${errorMessage}`, false);
     } finally {
       setOperationsLoading(false);
     }
@@ -1494,7 +2300,21 @@ const Admin: React.FC = () => {
 
   return (
     <Layout>
+      {/* Add the Modal component */}
+      <Modal
+        isOpen={modal.isOpen}
+        onClose={() => setModal(prev => ({ ...prev, isOpen: false }))}
+        title={modal.title}
+        type={modal.type}
+        onConfirm={modal.onConfirm}
+        showConfirmButton={modal.showConfirmButton}
+        showCancelButton={modal.showCancelButton}
+      >
+        {modal.message}
+      </Modal>
+      
       <div className="space-y-6">
+        {/* Remove the existing notification divs since we're using the Modal now */}
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between bg-white p-6 rounded-xl shadow-md border border-gray-200">
           <div>
@@ -1511,22 +2331,9 @@ const Admin: React.FC = () => {
             </button>
           </div>
         </div>
-        
-        {/* Modal Component */}
-        <Modal
-          isOpen={modalOpen}
-          onClose={() => setModalOpen(false)}
-          title={modalTitle}
-          type={modalType}
-          onConfirm={modalAction || undefined}
-          confirmText={confirmText}
-          cancelText={cancelText}
-          showConfirmButton={showConfirmButton}
-          showCancelButton={showCancelButton}
-        >
-          <p>{modalMessage}</p>
-        </Modal>
-        
+
+        {/* Notifications are now handled by the Modal component */}
+
         {/* Tabs */}
         <div className="bg-white rounded-xl shadow-md border border-gray-200 overflow-hidden">
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-0">
@@ -1874,6 +2681,14 @@ const Admin: React.FC = () => {
           {activeTab === 'operations' && renderOperations()}
         </div>
       </div>
+    </Layout>
+  );
+import Layout from "@/components/Layout";
+
+const Admin = () => {
+  return (
+    <Layout>
+      <div>Admin</div>
     </Layout>
   );
 };

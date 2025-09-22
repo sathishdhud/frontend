@@ -309,7 +309,7 @@ export const reservationApi = {
     apiClient.delete(`/reservations/${reservationId}`),
   
   // Update reservation status
-  updateReservationStatus: (reservationNo: string, status: string): Promise<AxiosResponse<ApiResponse<Reservation>>> =>
+  updateReservationStatus: (reservationNo: string, status: string): Promise<AxiosResponse<Reservation>>> =>
     apiClient.put(`/reservations/${reservationNo}/status`, { status }),
   
   // Get deleted reservations
@@ -392,56 +392,26 @@ export const masterDataApi = {
   getAccountHeads: (): Promise<AxiosResponse<ApiResponse<AccountHead[]>>> =>
     apiClient.get('/account-heads'),
   
-  getNationalities: (): Promise<AxiosResponse<ApiResponse<Nationality[]>>> =>
-    apiClient.get('/nationalities'),
+  getAccountHeadById: (accountHeadId: string): Promise<AxiosResponse<ApiResponse<AccountHead>>> =>
+    apiClient.get(`/account-heads/${accountHeadId}`),
   
-  getRefModes: (): Promise<AxiosResponse<ApiResponse<RefMode[]>>> =>
-    apiClient.get('/ref-modes'),
-  
-  getArrivalModes: (): Promise<AxiosResponse<ApiResponse<ArrivalMode[]>>> =>
-    apiClient.get('/arrival-modes'),
-  
-  getReservationSources: (): Promise<AxiosResponse<ApiResponse<ReservationSource[]>>> =>
-    apiClient.get('/reservation-sources'),
-  
-  getSettlementTypes: (): Promise<AxiosResponse<ApiResponse<SettlementType[]>>> =>
-    apiClient.get('/settlement-types'),
-
-  // Tax Master APIs
-  createTax: (taxData: { taxName?: string; percentage?: number }): Promise<AxiosResponse<ApiResponse<any>>> =>
-    apiClient.post('/taxes', taxData),
-  
-  updateTax: (taxId: string, taxData: { taxName?: string; percentage?: number }): Promise<AxiosResponse<ApiResponse<any>>> =>
-    apiClient.put(`/taxes/${taxId}`, taxData),
-  
-  deleteTax: (taxId: string): Promise<AxiosResponse<ApiResponse<any>>> =>
-    apiClient.delete(`/taxes/${taxId}`),
-  
-  // Account Head APIs
   createAccountHead: (accountData: { 
     accHeadId: string;
     name: string;
     companyName?: string;
     chequeNumber?: string;
     date?: string;
-  }): Promise<AxiosResponse<ApiResponse<any>>> =>
+  }): Promise<AxiosResponse<ApiResponse<AccountHead>>> =>
     apiClient.post('/account-heads', accountData),
   
-  getAccountHeadById: (accountHeadId: string): Promise<AxiosResponse<ApiResponse<AccountHead>>> =>
-    apiClient.get(`/account-heads/${accountHeadId}`),
-  
   updateAccountHead: (accountHeadId: string, accountData: { 
-    accHeadId: string;
     name: string;
     companyName?: string;
     chequeNumber?: string;
     date?: string;
-  }): Promise<AxiosResponse<ApiResponse<any>>> => {
-    // Remove any ID fields from the data to avoid conflicts
-    const { accHeadId, ...dataWithoutId } = accountData;
-    return apiClient.put(`/account-heads/${accountHeadId}`, dataWithoutId);
-  },
-
+  }): Promise<AxiosResponse<ApiResponse<AccountHead>>> =>
+    apiClient.put(`/account-heads/${accountHeadId}`, accountData),
+  
   deleteAccountHead: (accountHeadId: string): Promise<AxiosResponse<ApiResponse<any>>> =>
     apiClient.delete(`/account-heads/${accountHeadId}`),
 
