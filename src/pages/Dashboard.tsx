@@ -13,9 +13,10 @@ import {
   ArrowsRightLeftIcon
 } from '@heroicons/react/24/outline';
 import { useNavigate } from 'react-router-dom';
-import { Room, RoomStats, RoomType } from '../types/api';
+import { Room, RoomStats, RoomType, Company, PlanType, SettlementType, ArrivalMode, Nationality, RefMode, ReservationSource } from '../types/api';
 import { roomApi, reservationApi, checkInApi, masterDataApi, operationsApi, billApi } from '../services/api';
 import Layout from '../components/Layout/Layout';
+import Modal from '../components/Modal';
 
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
@@ -64,6 +65,28 @@ const Dashboard: React.FC = () => {
   });
   const [roomShiftLoading, setRoomShiftLoading] = useState(false);
 
+  // Add master data states
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [planTypes, setPlanTypes] = useState<PlanType[]>([]);
+  const [settlementTypes, setSettlementTypes] = useState<SettlementType[]>([]);
+  const [arrivalModes, setArrivalModes] = useState<ArrivalMode[]>([]);
+  const [nationalities, setNationalities] = useState<Nationality[]>([]);
+  const [refModes, setRefModes] = useState<RefMode[]>([]);
+  const [reservationSources, setReservationSources] = useState<ReservationSource[]>([]);
+  const [masterDataLoading, setMasterDataLoading] = useState(false);
+  const [masterDataFetched, setMasterDataFetched] = useState(false);
+
+  // Modal states
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modalTitle, setModalTitle] = useState('');
+  const [modalMessage, setModalMessage] = useState('');
+  const [modalType, setModalType] = useState<'info' | 'success' | 'warning' | 'error'>('info');
+  const [modalAction, setModalAction] = useState<(() => void) | null>(null);
+  const [showConfirmButton, setShowConfirmButton] = useState(true);
+  const [showCancelButton, setShowCancelButton] = useState(true);
+  const [confirmText, setConfirmText] = useState('Confirm');
+  const [cancelText, setCancelText] = useState('Cancel');
+
   const [checkInFormData, setCheckInFormData] = useState({
     reservationNo: '',
     guestName: '',
@@ -76,7 +99,25 @@ const Dashboard: React.FC = () => {
     rate: 0,
     remarks: '',
     includingGst: true,
+    // Enhanced fields
+    emailId: '',
+    idProof1: '',
+    idProof2: '',
+    idProof3: '',
+    companyId: '',
+    planId: '',
+    roomTypeId: '',
+    settlementTypeId: '',
+    arrivalModeId: '',
+    arrivalDetails: '',
+    nationalityId: '',
+    refModeId: '',
+    resvSourceId: '',
+    walkIn: 'N' as 'Y' | 'N',
   });
+  
+  // Add state for tabs
+  const [activeCheckInTab, setActiveCheckInTab] = useState<'basic' | 'additional'>('basic');
 
   const handleViewDetails = async (roomId: string) => {
     setDetailsOpen(true);
@@ -112,6 +153,21 @@ const Dashboard: React.FC = () => {
       rate: 0,
       remarks: '',
       includingGst: true,
+      // Enhanced fields
+      emailId: '',
+      idProof1: '',
+      idProof2: '',
+      idProof3: '',
+      companyId: '',
+      planId: '',
+      roomTypeId: '',
+      settlementTypeId: '',
+      arrivalModeId: '',
+      arrivalDetails: '',
+      nationalityId: '',
+      refModeId: '',
+      resvSourceId: '',
+      walkIn: 'N',
     });
     setReservationInfo(null);
     
@@ -155,6 +211,21 @@ const Dashboard: React.FC = () => {
                     mobileNumber: reservation.mobileNumber || guest.mobileNumber || '',
                     rate: reservation.rate || guest.rate || 0,
                     includingGst: reservation.includingGst === 'Y',
+                    // Enhanced fields
+                    emailId: reservation.emailId || guest.emailId || '',
+                    idProof1: reservation.idProof1 || guest.idProof1 || '',
+                    idProof2: reservation.idProof2 || guest.idProof2 || '',
+                    idProof3: reservation.idProof3 || guest.idProof3 || '',
+                    companyId: reservation.companyId || guest.companyId || '',
+                    planId: reservation.planId || guest.planId || '',
+                    roomTypeId: reservation.roomTypeId || guest.roomTypeId || '',
+                    settlementTypeId: reservation.settlementTypeId || guest.settlementTypeId || '',
+                    arrivalModeId: reservation.arrivalModeId || guest.arrivalModeId || '',
+                    arrivalDetails: reservation.arrivalDetails || guest.arrivalDetails || '',
+                    nationalityId: reservation.nationalityId || guest.nationalityId || '',
+                    refModeId: reservation.refModeId || guest.refModeId || '',
+                    resvSourceId: reservation.reservationSourceId || guest.resvSourceId || '',
+                    walkIn: guest.walkIn || 'N',
                   }));
                   return;
                 }
@@ -185,6 +256,21 @@ const Dashboard: React.FC = () => {
               mobileNumber: guest.mobileNumber || '',
               rate: guest.rate || 0,
               includingGst: true,
+              // Enhanced fields
+              emailId: guest.emailId || '',
+              idProof1: guest.idProof1 || '',
+              idProof2: guest.idProof2 || '',
+              idProof3: guest.idProof3 || '',
+              companyId: guest.companyId || '',
+              planId: guest.planId || '',
+              roomTypeId: guest.roomTypeId || '',
+              settlementTypeId: guest.settlementTypeId || '',
+              arrivalModeId: guest.arrivalModeId || '',
+              arrivalDetails: guest.arrivalDetails || '',
+              nationalityId: guest.nationalityId || '',
+              refModeId: guest.refModeId || '',
+              resvSourceId: guest.resvSourceId || '',
+              walkIn: guest.walkIn || 'N',
             }));
           }
         }
@@ -203,6 +289,72 @@ const Dashboard: React.FC = () => {
     // Initialize audit date
     setAuditDate(new Date().toLocaleDateString());
   }, []);
+
+  // Fetch master data when additional tab is opened
+  useEffect(() => {
+    if (activeCheckInTab === 'additional' && showCheckInForm && !masterDataFetched) {
+      fetchMasterData();
+    }
+  }, [activeCheckInTab, showCheckInForm, masterDataFetched]);
+
+  const fetchMasterData = async () => {
+    setMasterDataLoading(true);
+    try {
+      // Fetch all master data in parallel
+      const [
+        companiesRes,
+        planTypesRes,
+        settlementTypesRes,
+        arrivalModesRes,
+        nationalitiesRes,
+        refModesRes,
+        reservationSourcesRes
+      ] = await Promise.all([
+        masterDataApi.getCompanies(),
+        masterDataApi.getPlanTypes(),
+        masterDataApi.getSettlementTypes(),
+        masterDataApi.getArrivalModes(),
+        masterDataApi.getNationalities(),
+        masterDataApi.getRefModes(),
+        masterDataApi.getReservationSources()
+      ]);
+
+      // Set data for successful requests
+      if (companiesRes.data.success) {
+        setCompanies(companiesRes.data.data);
+      }
+      
+      if (planTypesRes.data.success) {
+        setPlanTypes(planTypesRes.data.data);
+      }
+      
+      if (settlementTypesRes.data.success) {
+        setSettlementTypes(settlementTypesRes.data.data);
+      }
+      
+      if (arrivalModesRes.data.success) {
+        setArrivalModes(arrivalModesRes.data.data);
+      }
+      
+      if (nationalitiesRes.data.success) {
+        setNationalities(nationalitiesRes.data.data);
+      }
+      
+      if (refModesRes.data.success) {
+        setRefModes(refModesRes.data.data);
+      }
+      
+      if (reservationSourcesRes.data.success) {
+        setReservationSources(reservationSourcesRes.data.data);
+      }
+      
+      setMasterDataFetched(true);
+    } catch (error) {
+      console.error('Failed to fetch master data:', error);
+    } finally {
+      setMasterDataLoading(false);
+    }
+  };
 
   const fetchHmsystemInfo = async () => {
     try {
@@ -298,6 +450,20 @@ const Dashboard: React.FC = () => {
             mobileNumber: reservation.mobileNumber || '',
             rate: reservation.rate || 0,
             includingGst: reservation.includingGst === 'Y',
+            // Additional details from reservation
+            emailId: reservation.emailId || '',
+            idProof1: reservation.idProof1 || '',
+            idProof2: reservation.idProof2 || '',
+            idProof3: reservation.idProof3 || '',
+            companyId: reservation.companyId || '',
+            planId: reservation.planId || '',
+            roomTypeId: reservation.roomTypeId || '',
+            settlementTypeId: reservation.settlementTypeId || '',
+            arrivalModeId: reservation.arrivalModeId || '',
+            arrivalDetails: reservation.arrivalDetails || '',
+            nationalityId: reservation.nationalityId || '',
+            refModeId: reservation.refModeId || '',
+            resvSourceId: reservation.reservationSourceId || '',
           }));
         } else {
           setReservationInfo(null);
@@ -323,6 +489,125 @@ const Dashboard: React.FC = () => {
     // Auto-fill guest info when reservation number changes
     if (name === 'reservationNo') {
       autoFillGuestInfo(value);
+    }
+  };
+
+  // Handler specifically for select elements
+  const handleCheckInSelectChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    setCheckInFormData(prev => ({
+      ...prev,
+      [name]: value,
+    }));
+  };
+
+  // Render a dropdown with consistent loading and error handling
+  const renderDropdown = (
+    name: string,
+    label: string,
+    options: any[],
+    valueKey: string,
+    labelKey: string,
+    placeholder: string = `Select ${label}`
+  ) => {
+    const value = checkInFormData[name as keyof typeof checkInFormData];
+    return (
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
+        <select
+          name={name}
+          value={value !== undefined && value !== null && typeof value !== 'boolean' ? value.toString() : ''}
+          onChange={handleCheckInSelectChange}
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          disabled={masterDataLoading}
+        >
+          <option value="">{masterDataLoading ? 'Loading...' : placeholder}</option>
+          {options.map((option) => (
+            <option key={option[valueKey]} value={option[valueKey]}>
+              {option[labelKey]}
+            </option>
+          ))}
+        </select>
+      </div>
+    );
+  };
+
+  // Handle check-in form submission
+  const handleCheckInSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setCheckInLoading(true);
+    
+    try {
+      // Prepare check-in data
+      const checkInData = {
+        ...checkInFormData,
+        roomId: selectedRoom?.roomId || '',
+        // Convert walkIn to string if needed
+        walkIn: checkInFormData.walkIn,
+      };
+      
+      // Remove fields that shouldn't be sent to the API
+      const { noOfDays, noOfPersons, noOfRooms, includingGst, ...apiData } = checkInData;
+      
+      const response = await checkInApi.processCheckIn(apiData);
+      
+      if (response.data.success) {
+        setModalTitle("Check-In Successful");
+        setModalMessage("Guest checked in successfully!");
+        setModalType('success');
+        setModalAction(() => {
+          setShowCheckInForm(false);
+          // Reset form data
+          setCheckInFormData({
+            reservationNo: '',
+            guestName: '',
+            arrivalDate: '',
+            departureDate: '',
+            noOfDays: 1,
+            noOfPersons: 1,
+            noOfRooms: 1,
+            mobileNumber: '',
+            rate: 0,
+            remarks: '',
+            includingGst: true,
+            // Enhanced fields
+            emailId: '',
+            idProof1: '',
+            idProof2: '',
+            idProof3: '',
+            companyId: '',
+            planId: '',
+            roomTypeId: '',
+            settlementTypeId: '',
+            arrivalModeId: '',
+            arrivalDetails: '',
+            nationalityId: '',
+            refModeId: '',
+            resvSourceId: '',
+            walkIn: 'N',
+          });
+          // Reset master data fetch state
+          setMasterDataFetched(false);
+          // Refresh room data
+          fetchRooms();
+          fetchRoomStats();
+          return null;
+        });
+        setModalOpen(true);
+      } else {
+        setModalTitle("Check-In Failed");
+        setModalMessage(response.data.message || 'Failed to check in guest');
+        setModalType('error');
+        setModalOpen(true);
+      }
+    } catch (error) {
+      console.error('Failed to check in guest:', error);
+      setModalTitle("Error");
+      setModalMessage('Failed to check in guest. Please try again.');
+      setModalType('error');
+      setModalOpen(true);
+    } finally {
+      setCheckInLoading(false);
     }
   };
 
@@ -414,14 +699,20 @@ const Dashboard: React.FC = () => {
     try {
       // Validate that a target room is selected
       if (!roomShiftData.toRoomId) {
-        alert('Please select a target room for the shift.');
+        setModalTitle("Validation Error");
+        setModalMessage("Please select a target room for the shift.");
+        setModalType('warning');
+        setModalOpen(true);
         setRoomShiftLoading(false);
         return;
       }
       
       // Validate that from and to rooms are different
       if (roomShiftData.fromRoomId === roomShiftData.toRoomId) {
-        alert('Cannot shift to the same room. Please select a different target room.');
+        setModalTitle("Validation Error");
+        setModalMessage("Cannot shift to the same room. Please select a different target room.");
+        setModalType('warning');
+        setModalOpen(true);
         setRoomShiftLoading(false);
         return;
       }
@@ -429,7 +720,10 @@ const Dashboard: React.FC = () => {
       // Check if the target room is vacant
       const targetRoom = rooms.find(r => r.roomId === roomShiftData.toRoomId);
       if (targetRoom && targetRoom.status !== 'VR') {
-        alert('The selected target room is not vacant. Please select a vacant room for shifting.');
+        setModalTitle("Validation Error");
+        setModalMessage("The selected target room is not vacant. Please select a vacant room for shifting.");
+        setModalType('warning');
+        setModalOpen(true);
         setRoomShiftLoading(false);
         return;
       }
@@ -443,21 +737,30 @@ const Dashboard: React.FC = () => {
       });
       
       if (response.data.success) {
-        alert('Room shifted successfully!');
-        setShowRoomShiftModal(false);
-        // Reset form
-        setRoomShiftData({
-          fromRoomId: '',
-          toRoomId: '',
-          folioNo: '',
-          guestName: '',
-          reason: ''
+        setModalTitle("Room Shift Successful");
+        setModalMessage("Room shifted successfully!");
+        setModalType('success');
+        setModalAction(() => {
+          setShowRoomShiftModal(false);
+          // Reset form
+          setRoomShiftData({
+            fromRoomId: '',
+            toRoomId: '',
+            folioNo: '',
+            guestName: '',
+            reason: ''
+          });
+          // Refresh room data
+          fetchRooms();
+          fetchRoomStats();
+          return null;
         });
-        // Refresh room data
-        await fetchRooms();
-        await fetchRoomStats();
+        setModalOpen(true);
       } else {
-        alert(response.data.message || 'Failed to shift room');
+        setModalTitle("Room Shift Failed");
+        setModalMessage(response.data.message || 'Failed to shift room');
+        setModalType('error');
+        setModalOpen(true);
       }
     } catch (error: any) {
       console.error('Failed to shift room:', error);
@@ -481,7 +784,10 @@ const Dashboard: React.FC = () => {
         errorMessage = error.message || errorMessage;
       }
       
-      alert(errorMessage);
+      setModalTitle("Error");
+      setModalMessage(errorMessage);
+      setModalType('error');
+      setModalOpen(true);
     } finally {
       setRoomShiftLoading(false);
     }
@@ -741,11 +1047,7 @@ const Dashboard: React.FC = () => {
                         e.stopPropagation();
                         handleViewBill(room.roomId);
                       }}
-                      className={`text-xs flex items-center ${
-                        room.status === 'VR' ? 'text-green-700 hover:text-green-900' : 
-                        room.status === 'OD' || room.status === 'OI' ? 'text-red-700 hover:text-red-900' : 
-                        'text-gray-700 hover:text-gray-900'
-                      }`}
+                      className="text-xs flex items-center text-red-700 hover:text-red-900"
                     >
                       <CurrencyRupeeIcon className="w-3 h-3 mr-1" />
                       Bill
@@ -755,11 +1057,7 @@ const Dashboard: React.FC = () => {
                         e.stopPropagation();
                         handleRoomShift(room);
                       }}
-                      className={`text-xs flex items-center ${
-                        room.status === 'VR' ? 'text-green-700 hover:text-green-900' : 
-                        room.status === 'OD' || room.status === 'OI' ? 'text-red-700 hover:text-red-900' : 
-                        'text-gray-700 hover:text-gray-900'
-                      }`}
+                      className="text-xs flex items-center text-red-700 hover:text-red-900"
                     >
                       <ArrowsRightLeftIcon className="w-3 h-3 mr-1" />
                       Shift
@@ -773,7 +1071,6 @@ const Dashboard: React.FC = () => {
                     }}
                     className={`text-xs flex items-center cursor-not-allowed ${
                       room.status === 'VR' ? 'text-green-500' : 
-                      room.status === 'OD' || room.status === 'OI' ? 'text-red-500' : 
                       'text-gray-500'
                     }`}
                     disabled
@@ -802,186 +1099,330 @@ const Dashboard: React.FC = () => {
               </button>
             </div>
             
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <h3 className="text-lg font-semibold mb-4">Guest Information</h3>
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Reservation Number</label>
-                    <div className="relative">
-                      <input
-                        type="text"
-                        name="reservationNo"
-                        value={checkInFormData.reservationNo}
-                        onChange={handleCheckInInputChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        placeholder="Enter reservation number"
-                      />
-                      {autoFillLoading && (
-                        <div className="absolute inset-y-0 right-0 flex items-center pr-3">
-                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+            <form onSubmit={handleCheckInSubmit}>
+              {/* Tabs */}
+              <div className="border-b border-gray-200 mb-6">
+                <nav className="-mb-px flex space-x-8">
+                  <button
+                    type="button"
+                    onClick={() => setActiveCheckInTab('basic')}
+                    className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                      activeCheckInTab === 'basic'
+                        ? 'border-blue-500 text-blue-600'
+                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    }`}
+                  >
+                    Basic Information
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveCheckInTab('additional')}
+                    className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                      activeCheckInTab === 'additional'
+                        ? 'border-blue-500 text-blue-600'
+                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    }`}
+                  >
+                    Additional Details
+                  </button>
+                </nav>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  {activeCheckInTab === 'basic' ? (
+                    <>
+                      <h3 className="text-lg font-semibold mb-4">Guest Information</h3>
+                      <div className="space-y-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Reservation Number</label>
+                          <div className="relative">
+                            <input
+                              type="text"
+                              name="reservationNo"
+                              value={checkInFormData.reservationNo}
+                              onChange={handleCheckInInputChange}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                              placeholder="Enter reservation number"
+                            />
+                            {autoFillLoading && (
+                              <div className="absolute inset-y-0 right-0 flex items-center pr-3">
+                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                              </div>
+                            )}
+                          </div>
+                          {/* Reservation Info Display */}
+                          {reservationInfo && (
+                            <div className="mt-2 p-3 bg-blue-50 rounded-lg border border-blue-100">
+                              <div className="flex justify-between items-center">
+                                <div>
+                                  <p className="text-sm font-medium text-blue-800">{reservationInfo.guestName}</p>
+                                  <p className="text-xs text-blue-600">
+                                    Rooms: {reservationInfo.noOfRooms} | 
+                                    Checked In: {reservationInfo.roomsCheckedIn || 0} | 
+                                    Remaining: {reservationInfo.noOfRooms - (reservationInfo.roomsCheckedIn || 0)}
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          )}
                         </div>
-                      )}
-                    </div>
-                    {/* Reservation Info Display */}
-                    {reservationInfo && (
-                      <div className="mt-2 p-3 bg-blue-50 rounded-lg border border-blue-100">
-                        <div className="flex justify-between items-center">
+                        
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Guest Name</label>
+                          <input
+                            type="text"
+                            name="guestName"
+                            value={checkInFormData.guestName}
+                            onChange={handleCheckInInputChange}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            placeholder="Enter guest name"
+                          />
+                        </div>
+                        
+                        <div className="grid grid-cols-2 gap-4">
                           <div>
-                            <p className="text-sm font-medium text-blue-800">{reservationInfo.guestName}</p>
-                            <p className="text-xs text-blue-600">
-                              Rooms: {reservationInfo.noOfRooms} | 
-                              Checked In: {reservationInfo.roomsCheckedIn || 0} | 
-                              Remaining: {reservationInfo.noOfRooms - (reservationInfo.roomsCheckedIn || 0)}
-                            </p>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Arrival Date</label>
+                            <input
+                              type="date"
+                              name="arrivalDate"
+                              value={checkInFormData.arrivalDate}
+                              onChange={handleCheckInInputChange}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            />
+                          </div>
+                          
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Departure Date</label>
+                            <input
+                              type="date"
+                              name="departureDate"
+                              value={checkInFormData.departureDate}
+                              onChange={handleCheckInInputChange}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            />
+                          </div>
+                        </div>
+                        
+                        <div className="grid grid-cols-3 gap-4">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">No of Days</label>
+                            <input
+                              type="number"
+                              name="noOfDays"
+                              min="1"
+                              value={checkInFormData.noOfDays}
+                              onChange={handleCheckInInputChange}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            />
+                          </div>
+                          
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">No of Persons</label>
+                            <input
+                              type="number"
+                              name="noOfPersons"
+                              min="1"
+                              value={checkInFormData.noOfPersons}
+                              onChange={handleCheckInInputChange}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            />
+                          </div>
+                          
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">No of Rooms</label>
+                            <input
+                              type="number"
+                              name="noOfRooms"
+                              min="1"
+                              value={checkInFormData.noOfRooms}
+                              onChange={handleCheckInInputChange}
+                              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            />
                           </div>
                         </div>
                       </div>
-                    )}
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Guest Name</label>
-                    <input
-                      type="text"
-                      name="guestName"
-                      value={checkInFormData.guestName}
-                      onChange={handleCheckInInputChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      placeholder="Enter guest name"
-                    />
-                  </div>
-                  
-                  <div className="grid grid-cols-2 gap-4">
+                    </>
+                  ) : (
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Arrival Date</label>
-                      <input
-                        type="date"
-                        name="arrivalDate"
-                        value={checkInFormData.arrivalDate}
-                        onChange={handleCheckInInputChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      />
+                      <h3 className="text-lg font-semibold mb-4">Additional Details</h3>
+                      <div className="space-y-4">
+                        {/* Company Dropdown */}
+                        {renderDropdown("companyId", "Company", companies, "companyId", "companyName", "Select Company")}
+                        
+                        {/* Plan Type Dropdown */}
+                        {renderDropdown("planId", "Plan Type", planTypes, "planId", "planName", "Select Plan")}
+                        
+                        {/* Room Type Dropdown */}
+                        {renderDropdown("roomTypeId", "Room Type", roomTypes, "typeId", "typeName", "Select Room Type")}
+                        
+                        {/* Settlement Type Dropdown */}
+                        {renderDropdown("settlementTypeId", "Settlement Type", settlementTypes, "id", "name", "Select Settlement Type")}
+                        
+                        {/* Arrival Mode Dropdown */}
+                        {renderDropdown("arrivalModeId", "Arrival Mode", arrivalModes, "id", "arrivalMode", "Select Arrival Mode")}
+                        
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Arrival Details</label>
+                          <input
+                            type="text"
+                            name="arrivalDetails"
+                            value={checkInFormData.arrivalDetails}
+                            onChange={handleCheckInInputChange}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            placeholder="e.g., Flight AA123 at 14:30"
+                          />
+                        </div>
+                        
+                        {/* Nationality Dropdown */}
+                        {renderDropdown("nationalityId", "Nationality", nationalities, "id", "nationality", "Select Nationality")}
+                        
+                        {/* Ref Mode Dropdown */}
+                        {renderDropdown("refModeId", "Ref Mode", refModes, "id", "refMode", "Select Ref Mode")}
+                        
+                        {/* Reservation Source Dropdown */}
+                        {renderDropdown("resvSourceId", "Reservation Source", reservationSources, "id", "resvSource", "Select Reservation Source")}
+                        
+                        {/* ID Proof Fields */}
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">ID Proof 1</label>
+                          <input
+                            type="text"
+                            name="idProof1"
+                            value={checkInFormData.idProof1}
+                            onChange={handleCheckInInputChange}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            placeholder="e.g., Passport: P12345678"
+                          />
+                        </div>
+                        
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">ID Proof 2</label>
+                          <input
+                            type="text"
+                            name="idProof2"
+                            value={checkInFormData.idProof2}
+                            onChange={handleCheckInInputChange}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            placeholder="e.g., Driving License: DL987654321"
+                          />
+                        </div>
+                        
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">ID Proof 3</label>
+                          <input
+                            type="text"
+                            name="idProof3"
+                            value={checkInFormData.idProof3}
+                            onChange={handleCheckInInputChange}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            placeholder="e.g., Aadhar Card: 1234-5678-9012"
+                          />
+                        </div>
+                        
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Email ID</label>
+                          <input
+                            type="email"
+                            name="emailId"
+                            value={checkInFormData.emailId}
+                            onChange={handleCheckInInputChange}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            placeholder="Enter email address"
+                          />
+                        </div>
+                      </div>
                     </div>
-                    
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Departure Date</label>
-                      <input
-                        type="date"
-                        name="departureDate"
-                        value={checkInFormData.departureDate}
-                        onChange={handleCheckInInputChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      />
-                    </div>
-                  </div>
-                  
-                  <div className="grid grid-cols-3 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">No of Days</label>
-                      <input
-                        type="number"
-                        name="noOfDays"
-                        min="1"
-                        value={checkInFormData.noOfDays}
-                        onChange={handleCheckInInputChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      />
-                    </div>
-                    
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">No of Persons</label>
-                      <input
-                        type="number"
-                        name="noOfPersons"
-                        min="1"
-                        value={checkInFormData.noOfPersons}
-                        onChange={handleCheckInInputChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      />
-                    </div>
-                    
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">No of Rooms</label>
-                      <input
-                        type="number"
-                        name="noOfRooms"
-                        min="1"
-                        value={checkInFormData.noOfRooms}
-                        onChange={handleCheckInInputChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      />
-                    </div>
-                  </div>
+                  )}
                 </div>
-              </div>
-              
-              <div>
-                <h3 className="text-lg font-semibold mb-4">Additional Information</h3>
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Mobile Number</label>
-                    <input
-                      type="tel"
-                      name="mobileNumber"
-                      value={checkInFormData.mobileNumber}
-                      onChange={handleCheckInInputChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      placeholder="Enter mobile number"
-                    />
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Rate</label>
-                    <input
-                      type="number"
-                      name="rate"
-                      min="0"
-                      value={checkInFormData.rate}
-                      onChange={handleCheckInInputChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      placeholder="Enter rate"
-                    />
-                  </div>
-                  
-                  {/* Including GST Toggle */}
-                  <div>
-                    <label className="flex items-center space-x-3">
-                      <input
-                        type="checkbox"
-                        name="includingGst"
-                        checked={checkInFormData.includingGst}
-                        onChange={handleCheckInInputChange}
-                        className="w-5 h-5 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                      />
-                      <span className="text-sm font-medium text-gray-700">Including GST</span>
-                    </label>
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Remarks</label>
-                    <textarea
-                      name="remarks"
-                      value={checkInFormData.remarks}
-                      onChange={handleCheckInInputChange}
-                      rows={3}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      placeholder="Any special requests or notes"
-                    ></textarea>
-                  </div>
+                
+                <div>
+                  {activeCheckInTab === 'basic' ? (
+                    <>
+                      <h3 className="text-lg font-semibold mb-4">Additional Information</h3>
+                      <div className="space-y-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Mobile Number</label>
+                          <input
+                            type="tel"
+                            name="mobileNumber"
+                            value={checkInFormData.mobileNumber}
+                            onChange={handleCheckInInputChange}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            placeholder="Enter mobile number"
+                          />
+                        </div>
+                        
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Rate</label>
+                          <input
+                            type="number"
+                            name="rate"
+                            min="0"
+                            value={checkInFormData.rate}
+                            onChange={handleCheckInInputChange}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            placeholder="Enter rate"
+                          />
+                        </div>
+                        
+                        {/* Including GST Toggle */}
+                        <div>
+                          <label className="flex items-center space-x-3">
+                            <input
+                              type="checkbox"
+                              name="includingGst"
+                              checked={checkInFormData.includingGst}
+                              onChange={handleCheckInInputChange}
+                              className="w-5 h-5 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                            />
+                            <span className="text-sm font-medium text-gray-700">Including GST</span>
+                          </label>
+                        </div>
+                        
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Remarks</label>
+                          <textarea
+                            name="remarks"
+                            value={checkInFormData.remarks}
+                            onChange={handleCheckInInputChange}
+                            rows={3}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                            placeholder="Any special requests or notes"
+                          ></textarea>
+                        </div>
+                        
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">Walk-In</label>
+                          <select
+                            name="walkIn"
+                            value={checkInFormData.walkIn}
+                            onChange={handleCheckInSelectChange}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          >
+                            <option value="N">No</option>
+                            <option value="Y">Yes</option>
+                          </select>
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    // Empty div for the additional tab since all content is in the left column
+                    <div></div>
+                  )}
                   
                   <div className="pt-4">
                     <button
+                      type="submit"
                       disabled={checkInLoading}
                       className="w-full bg-gradient-to-r from-blue-600 to-purple-600 text-white font-semibold py-3 px-4 rounded-lg hover:from-blue-700 hover:to-purple-700 transition-all disabled:opacity-50 mb-3"
                     >
                       {checkInLoading ? 'Processing...' : 'Check-In Guest'}
                     </button>
-                    
                   </div>
                 </div>
               </div>
-            </div>
+            </form>
           </div>
         )}
 
@@ -1124,8 +1565,7 @@ const Dashboard: React.FC = () => {
                       <option key={room.roomId} value={room.roomId}>
                         Room {room.roomNo} (Floor {room.floor})
                       </option>
-                    ))
-                  }
+                    ))}
                 </select>
               </div>
               
@@ -1180,6 +1620,19 @@ const Dashboard: React.FC = () => {
           </div>
         </div>
       )}
+      <Modal
+        isOpen={modalOpen}
+        onClose={() => setModalOpen(false)}
+        title={modalTitle}
+        type={modalType}
+        onConfirm={modalAction || undefined}
+        confirmText={confirmText}
+        cancelText={cancelText}
+        showConfirmButton={showConfirmButton}
+        showCancelButton={showCancelButton}
+      >
+        {modalMessage}
+      </Modal>
     </Layout>
   );
 };

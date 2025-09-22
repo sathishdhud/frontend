@@ -1,7 +1,33 @@
 // Transaction APIs
 
 import axios, { AxiosResponse } from 'axios';
-import { ApiResponse, User, UserType, Room, RoomStats, Reservation, CheckIn, Advance, PaymentMode, RoomType, Company, PlanType, Tax, AccountHead, Nationality, RefMode, ArrivalMode, ReservationSource, Transaction, HousekeepingTask, HousekeepingStats, SettlementType, BillUpdateRequest } from '../types/api';
+import { 
+  ApiResponse, 
+  User, 
+  UserType,
+  Room, 
+  RoomStats, 
+  Reservation, 
+  CheckIn, 
+  Advance, 
+  PaymentMode, 
+  RoomType, 
+  Company, 
+  PlanType, 
+  Tax, 
+  AccountHead, 
+  Nationality, 
+  RefMode, 
+  ArrivalMode, 
+  ReservationSource, 
+  Transaction, 
+  HousekeepingTask, 
+  HousekeepingStats, 
+  SettlementType, 
+  BillUpdateRequest, 
+  Expense, 
+  SalesReceipt 
+} from '../types/api';
 
 const API_BASE_URL = 'https://backend-production-1f41.up.railway.app/api'
 //const API_BASE_URL = 'http://localhost:8080/api';
@@ -28,9 +54,15 @@ apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
+      // Clear local storage and redirect to login
       localStorage.removeItem('token');
       localStorage.removeItem('user');
-      window.location.href = '/login';
+      localStorage.removeItem('loginTime');
+      
+      // Redirect to login page if we're in a browser environment
+      if (typeof window !== 'undefined') {
+        window.location.href = '/login';
+      }
     }
     return Promise.reject(error);
   }
@@ -185,6 +217,37 @@ export const transactionApi = {
     apiClient.post('/transactions/inhouse', data),
   getTransactionsByFolio: (folioNo: string): Promise<AxiosResponse<ApiResponse<Transaction[]>>> =>
     apiClient.get(`/transactions/folio/${folioNo}`),
+  
+  // Expense Management
+  createExpense: (data: {
+    voucherNo: string;
+    date: string;
+    accountHeadId: string;
+    amount: number;
+    narration?: string;
+    shiftNo: string;
+    shiftDate: string;
+  }): Promise<AxiosResponse<ApiResponse<Expense>>> =>
+    apiClient.post('/transactions/expenses', data),
+  
+  getExpenses: (): Promise<AxiosResponse<ApiResponse<Expense[]>>> =>
+    apiClient.get('/transactions/expenses'),
+  
+  // Sales Receipt Management
+  createSalesReceipt: (data: {
+    receiptNo: string;
+    date: string;
+    modeOfPaymentId: string;
+    amount: number;
+    voucherNo: string;
+    narration?: string;
+    shiftNo: string;
+    shiftDate: string;
+  }): Promise<AxiosResponse<ApiResponse<SalesReceipt>>> =>
+    apiClient.post('/transactions/sales-receipts', data),
+  
+  getSalesReceipts: (): Promise<AxiosResponse<ApiResponse<SalesReceipt[]>>> =>
+    apiClient.get('/transactions/sales-receipts'),
 };
 
 // Bill APIs
@@ -268,6 +331,22 @@ export const checkInApi = {
   
   searchCheckIns: (searchTerm: string): Promise<AxiosResponse<ApiResponse<CheckIn[]>>> =>
     apiClient.get(`/checkins/search?searchTerm=${encodeURIComponent(searchTerm)}`),
+  
+  // Get check-in by folio number
+  getCheckInByFolio: (folioNo: string): Promise<AxiosResponse<ApiResponse<CheckIn>>> =>
+    apiClient.get(`/checkins/${folioNo}`),
+  
+  // Get check-in by room ID
+  getCheckInByRoom: (roomId: string): Promise<AxiosResponse<ApiResponse<CheckIn>>> =>
+    apiClient.get(`/checkins/room/${roomId}`),
+  
+  // Update check-in details
+  updateCheckIn: (folioNo: string, checkInData: Partial<CheckIn>): Promise<AxiosResponse<ApiResponse<CheckIn>>> =>
+    apiClient.put(`/checkins/${folioNo}`, checkInData),
+  
+  // Get expected checkouts for a specific date
+  getExpectedCheckouts: (date: string): Promise<AxiosResponse<ApiResponse<CheckIn[]>>> =>
+    apiClient.get(`/checkins/checkouts/${date}`),
 };
 
 // Advance APIs
@@ -339,15 +418,33 @@ export const masterDataApi = {
     apiClient.delete(`/taxes/${taxId}`),
   
   // Account Head APIs
-  createAccountHead: (accountData: { accountName: string }): Promise<AxiosResponse<ApiResponse<any>>> =>
+  createAccountHead: (accountData: { 
+    accHeadId: string;
+    name: string;
+    companyName?: string;
+    chequeNumber?: string;
+    date?: string;
+  }): Promise<AxiosResponse<ApiResponse<any>>> =>
     apiClient.post('/account-heads', accountData),
   
-  updateAccountHead: (accountHeadId: string, accountData: { accountName: string }): Promise<AxiosResponse<ApiResponse<any>>> =>
-    apiClient.put(`/account-heads/${accountHeadId}`, accountData),
+  getAccountHeadById: (accountHeadId: string): Promise<AxiosResponse<ApiResponse<AccountHead>>> =>
+    apiClient.get(`/account-heads/${accountHeadId}`),
   
+  updateAccountHead: (accountHeadId: string, accountData: { 
+    accHeadId: string;
+    name: string;
+    companyName?: string;
+    chequeNumber?: string;
+    date?: string;
+  }): Promise<AxiosResponse<ApiResponse<any>>> => {
+    // Remove any ID fields from the data to avoid conflicts
+    const { accHeadId, ...dataWithoutId } = accountData;
+    return apiClient.put(`/account-heads/${accountHeadId}`, dataWithoutId);
+  },
+
   deleteAccountHead: (accountHeadId: string): Promise<AxiosResponse<ApiResponse<any>>> =>
     apiClient.delete(`/account-heads/${accountHeadId}`),
-  
+
   // Room APIs
   createRoom: (roomData: { roomNo: string; floor: string; status: string; roomTypeId: string }): Promise<AxiosResponse<ApiResponse<any>>> =>
     apiClient.post('/rooms', roomData),
@@ -491,7 +588,13 @@ export const operationsApi = {
     apiClient.post('/operations/shift-change', data),
   
   // Shift close with automatic shift rotation logic
-  shiftClose: (data: { balance: number }): Promise<AxiosResponse<ApiResponse<any>>> =>
+  shiftClose: (data: { 
+    balance: number;
+    closingBalance?: number;
+    totalIncome?: number;
+    totalExpense?: number;
+    openingBalance?: number;
+  }): Promise<AxiosResponse<ApiResponse<any>>> =>
     apiClient.post('/operations/shift-close', data),
   
   // Get HMS system information

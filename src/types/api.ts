@@ -95,6 +95,21 @@ export interface CheckIn {
   rate: number;
   walkIn: 'Y' | 'N';
   remarks?: string;
+  // Enhanced fields as per API documentation
+  idProof1?: string;
+  idProof2?: string;
+  idProof3?: string;
+  companyId?: string;
+  planId?: string;
+  roomTypeId?: string;
+  settlementTypeId?: string;
+  arrivalModeId?: string;
+  arrivalDetails?: string;
+  nationalityId?: string;
+  refModeId?: string;
+  resvSourceId?: string;
+  auditDate?: string;
+  totalAdvances?: number;
 }
 
 export interface Advance {
@@ -170,8 +185,11 @@ export interface Tax {
 }
 
 export interface AccountHead {
-  accountHeadId: string;
-  accountName: string;
+  accHeadId: string;
+  name: string;
+  companyName?: string;
+  chequeNumber?: string;
+  date?: string;
 }
 
 export interface Nationality {
@@ -254,9 +272,13 @@ export interface Hmsystem {
 // Shift interface
 export interface Shift {
   id?: number;
-  shiftNo: string;
-  shiftDate: string;
-  balance: number;
+  no: string; // shift no
+  date: string; // shift date
+  audit_date?: string; // audit date
+  opening_balance?: number;
+  closing_balance?: number;
+  total_income?: number;
+  total_expense?: number;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -264,4 +286,32 @@ export interface Shift {
 // Shift close request interface
 export interface ShiftCloseRequest {
   balance: number;
+}
+
+// Expense interface
+export interface Expense {
+  transactionId?: string;
+  voucherNo: string;
+  date: string;
+  accountHeadId: string;
+  accHeadName?: string;
+  amount: number;
+  narration?: string;
+  shiftNo: string;
+  shiftDate: string;
+  createdAt?: string;
+}
+
+// Sales Receipt interface
+export interface SalesReceipt {
+  receiptNo: string;
+  date: string;
+  modeOfPaymentId: string;
+  modeOfPaymentName?: string;
+  amount: number;
+  voucherNo: string;
+  narration?: string;
+  shiftNo: string;
+  shiftDate: string;
+  createdAt?: string;
 }

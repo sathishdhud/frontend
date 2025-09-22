@@ -7,6 +7,7 @@ import { BillPayment } from '../types/api';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { CheckCircleIcon } from '@heroicons/react/24/outline';
 import jsPDF from 'jspdf';
+import Modal from '../components/Modal';
 
 const Cashier = () => {
   const [activeTab, setActiveTab] = useState<'record' | 'edit' | 'view' | 'reprint' | 'expenses' | 'settlement' | 'sales' | 'split'>('record');
@@ -62,6 +63,9 @@ const Cashier = () => {
     amount: 0,
     narration: '',
     modeOfPaymentId: '',
+    voucherNo: '', // Add voucherNo field
+    shiftNo: '1', // Add shiftNo field with default value
+    shiftDate: new Date().toISOString().split('T')[0], // Add shiftDate field
   });
   
   // Split Bill state
@@ -116,24 +120,35 @@ const Cashier = () => {
   const [attemptedAutoFill, setAttemptedAutoFill] = useState(false);
   // Add state for context value error
   const [contextError, setContextError] = useState<string | null>(null);
-  // Add notification states
-  const [successMessage, setSuccessMessage] = useState('');
-  const [errorMessage, setErrorMessage] = useState('');
+
+  // Modal states
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modalTitle, setModalTitle] = useState('');
+  const [modalMessage, setModalMessage] = useState('');
+  const [modalType, setModalType] = useState<'info' | 'success' | 'warning' | 'error'>('info');
+  const [modalAction, setModalAction] = useState<(() => void) | null>(null);
+  const [showConfirmButton, setShowConfirmButton] = useState(true);
+  const [showCancelButton, setShowCancelButton] = useState(true);
+  const [confirmText, setConfirmText] = useState('Confirm');
+  const [cancelText, setCancelText] = useState('Cancel');
 
   // Function to show notifications
   const showNotification = (message: string, isSuccess: boolean = true) => {
     if (isSuccess) {
-      setSuccessMessage(message);
-      setErrorMessage('');
+      setModalTitle("Success");
+      setModalMessage(message);
+      setModalType('success');
     } else {
-      setErrorMessage(message);
-      setSuccessMessage('');
+      setModalTitle("Error");
+      setModalMessage(message);
+      setModalType('error');
     }
     
-    // Clear notifications after 5 seconds
+    setModalOpen(true);
+    
+    // Clear modal after 5 seconds
     setTimeout(() => {
-      setSuccessMessage('');
-      setErrorMessage('');
+      setModalOpen(false);
     }, 5000);
   };
 
@@ -341,7 +356,7 @@ const Cashier = () => {
       
       setAdvances(allAdvances);
     } catch (error) {
-      console.error('Failed to fetch advances:', error);
+      showNotification('Failed to fetch advances. Please try again.', false);
       setAdvances([]);
     } finally {
       setAdvancesLoading(false);
@@ -402,7 +417,7 @@ const Cashier = () => {
         setExpensesData(prev => ({ ...prev, guestName: '' }));
       }
     } catch (error) {
-      console.error('Failed to fetch guest name for expenses entry:', error);
+      showNotification('Failed to fetch guest name for expenses entry. Please try again.', false);
       setExpensesData(prev => ({ ...prev, guestName: '' }));
     }
   };
@@ -482,7 +497,7 @@ const Cashier = () => {
                       setContextError('Folio not found');
                     }
                   } catch (checkInError) {
-                    console.error('Failed to fetch guest name from check-in API:', checkInError);
+                    showNotification('Failed to fetch guest name from check-in API. Please try again.', false);
                     setFormData(prev => ({ ...prev, guestName: '' }));
                     setContextError('Failed to fetch guest information for folio');
                   }
@@ -504,13 +519,13 @@ const Cashier = () => {
                     setContextError('Folio not found');
                   }
                 } catch (checkInError) {
-                  console.error('Failed to fetch guest name from check-in API:', checkInError);
+                  showNotification('Failed to fetch guest name from check-in API. Please try again.', false);
                   setFormData(prev => ({ ...prev, guestName: '' }));
                   setContextError('Failed to fetch guest information for folio');
                 }
               }
             } catch (folioError) {
-              console.error('Failed to fetch advances for folio:', folioError);
+              showNotification('Failed to fetch advances for folio. Please try again.', false);
               setFormData(prev => ({ ...prev, guestName: '' }));
               setContextError('Failed to fetch guest name for folio');
             }
@@ -549,13 +564,13 @@ const Cashier = () => {
                     setContextError('Reservation not found');
                   }
                 } catch (reservationError) {
-                  console.error('Failed to fetch guest name from reservation API:', reservationError);
+                  showNotification('Failed to fetch guest name from reservation API. Please try again.', false);
                   setFormData(prev => ({ ...prev, guestName: '' }));
                   setContextError('Failed to fetch guest information for reservation');
                 }
               }
             } catch (guestError) {
-              console.error('Failed to fetch guest name for reservation:', guestError);
+              showNotification('Failed to fetch guest name for reservation. Please try again.', false);
               setFormData(prev => ({ ...prev, guestName: '' }));
               setContextError('Failed to fetch guest name for reservation');
             }
@@ -606,7 +621,7 @@ const Cashier = () => {
                 setContextError('No in-house guests found');
               }
             } catch (billError) {
-              console.error('Failed to fetch guest name for bill:', billError);
+              showNotification('Failed to fetch guest name for bill. Please try again.', false);
               setFormData(prev => ({ ...prev, guestName: '' }));
               setContextError('Failed to fetch guest information for bill number');
             }
@@ -617,7 +632,7 @@ const Cashier = () => {
           setContextError('Please enter a valid context value (R..., F..., or B...)');
         }
       } catch (error) {
-        console.error('Failed to auto-fill guest name:', error);
+        showNotification('Failed to auto-fill guest name. Please try again.', false);
         setFormData(prev => ({ ...prev, guestName: '' }));
         setContextError('Failed to fetch guest information');
       } finally {
@@ -692,7 +707,7 @@ const Cashier = () => {
                       setContextError('Folio not found');
                     }
                   } catch (checkInError) {
-                    console.error('Failed to fetch guest name from check-in API:', checkInError);
+                    showNotification('Failed to fetch guest name from check-in API. Please try again.', false);
                     setEditForm(prev => ({ ...prev, guestName: '' }));
                     setContextError('Failed to fetch guest information for folio');
                   }
@@ -714,13 +729,13 @@ const Cashier = () => {
                     setContextError('Folio not found');
                   }
                 } catch (checkInError) {
-                  console.error('Failed to fetch guest name from check-in API:', checkInError);
+                  showNotification('Failed to fetch guest name from check-in API. Please try again.', false);
                   setEditForm(prev => ({ ...prev, guestName: '' }));
                   setContextError('Failed to fetch guest information for folio');
                 }
               }
             } catch (folioError) {
-              console.error('Failed to fetch advances for folio:', folioError);
+              showNotification('Failed to fetch advances for folio. Please try again.', false);
               setEditForm(prev => ({ ...prev, guestName: '' }));
               setContextError('Failed to fetch guest name for folio');
             }
@@ -760,13 +775,13 @@ const Cashier = () => {
                     setContextError('Reservation not found');
                   }
                 } catch (reservationError) {
-                  console.error('Failed to fetch guest name from reservation API:', reservationError);
+                  showNotification('Failed to fetch guest name from reservation API. Please try again.', false);
                   setEditForm(prev => ({ ...prev, guestName: '' }));
                   setContextError('Failed to fetch guest information for reservation');
                 }
               }
             } catch (guestError) {
-              console.error('Failed to fetch guest name for reservation (edit):', guestError);
+              showNotification('Failed to fetch guest name for reservation. Please try again.', false);
               setEditForm(prev => ({ ...prev, guestName: '' }));
               setContextError('Failed to fetch guest name for reservation');
             }
@@ -817,7 +832,7 @@ const Cashier = () => {
                 setContextError('No in-house guests found');
               }
             } catch (billError) {
-              console.error('Failed to fetch guest name for bill (edit):', billError);
+              showNotification('Failed to fetch guest name for bill. Please try again.', false);
               setEditForm(prev => ({ ...prev, guestName: '' }));
               setContextError('Failed to fetch guest information for bill number');
             }
@@ -828,7 +843,7 @@ const Cashier = () => {
           setContextError('Please enter a valid context value (R..., F..., or B...)');
         }
       } catch (error) {
-        console.error('Failed to auto-fill guest name (edit):', error);
+        showNotification('Failed to auto-fill guest name. Please try again.', false);
         setEditForm(prev => ({ ...prev, guestName: '' }));
         setContextError('Failed to fetch guest information');
       } finally {
@@ -938,19 +953,29 @@ const Cashier = () => {
 
   // Handle deleting an advance
   const handleDeleteAdvance = async (advanceId: string) => {
-    if (!window.confirm('Are you sure you want to delete this advance?')) {
-      return;
-    }
+    setModalTitle("Confirm Delete");
+    setModalMessage("Are you sure you want to delete this advance?");
+    setModalType('warning');
+    setConfirmText("Delete");
+    setCancelText("Cancel");
+    setShowConfirmButton(true);
+    setShowCancelButton(true);
     
-    try {
-      showNotification('Delete functionality is not implemented in the backend API. In a real implementation, this would delete the advance.', false);
-      
-      // After successful delete, refresh the view
-      fetchAdvances();
-      fetchSummary();
-    } catch (error: any) {
-      showNotification(`Error: ${error.response?.data?.message || 'Failed to delete advance'}`, false);
-    }
+    // Set the action to perform when confirmed
+    setModalAction(() => async () => {
+      try {
+        showNotification('Delete functionality is not implemented in the backend API. In a real implementation, this would delete the advance.', false);
+        
+        // After successful delete, refresh the view
+        fetchAdvances();
+        fetchSummary();
+      } catch (error: any) {
+        showNotification(`Error: ${error.response?.data?.message || 'Failed to delete advance'}`, false);
+      }
+      setModalOpen(false);
+    });
+    
+    setModalOpen(true);
   };
 
   const handleClearForm = () => {
@@ -1020,7 +1045,7 @@ const Cashier = () => {
                 billTransactions = transactionsResponse.data.data;
               }
             } catch (error) {
-              console.error('Error fetching transactions:', error);
+              showNotification('Error fetching transactions. Please try again.', false);
             }
           }
           
@@ -1031,7 +1056,7 @@ const Cashier = () => {
               billAdvances = advancesResponse.data.data;
             }
           } catch (error) {
-            console.error('Error fetching advances by bill:', error);
+            showNotification('Error fetching advances by bill. Please try again.', false);
           }
           
           // If no advances found by bill number, try by folio number
@@ -1042,7 +1067,7 @@ const Cashier = () => {
                 billAdvances = advancesResponse.data.data;
               }
             } catch (error) {
-              console.error('Error fetching advances by folio:', error);
+              showNotification('Error fetching advances by folio. Please try again.', false);
             }
           }
           
@@ -1054,7 +1079,7 @@ const Cashier = () => {
                 billAdvances = advancesResponse.data.data;
               }
             } catch (error) {
-              console.error('Error fetching advances by reservation:', error);
+              showNotification('Error fetching advances by reservation. Please try again.', false);
             }
           }
           
@@ -1396,7 +1421,7 @@ const Cashier = () => {
       const fileName = `Bill_${billData.billNo || 'unknown'}_${new Date().toISOString().slice(0, 10)}.pdf`;
       pdf.save(fileName);
     } catch (error) {
-      console.error('Error generating PDF:', error);
+      showNotification('Error generating PDF. Please try again.', false);
       showNotification('Failed to generate PDF. Please try again.', false);
     }
   };
@@ -1424,7 +1449,7 @@ const Cashier = () => {
             }
           }
         } catch (error) {
-          console.error('Failed to fetch guest name:', error);
+          showNotification('Failed to fetch guest name. Please try again.', false);
         }
       }
       
@@ -1456,7 +1481,7 @@ const Cashier = () => {
         throw new Error(transactionResponse.data.message || 'Failed to record expenses');
       }
     } catch (error: any) {
-      console.error('Error recording expenses:', error);
+      showNotification('Error recording expenses. Please try again.', false);
       showNotification(`Error: ${error.response?.data?.message || error.message || 'Failed to record expenses'}`, false);
     } finally {
       setLoading(false);
@@ -1483,7 +1508,7 @@ const Cashier = () => {
         setSettlementData(prev => ({ ...prev, guestName: '' }));
       }
     } catch (error) {
-      console.error('Failed to fetch guest name for settlement entry:', error);
+      showNotification('Failed to fetch guest name for settlement entry. Please try again.', false);
       setSettlementData(prev => ({ ...prev, guestName: '' }));
     }
   };
@@ -1558,7 +1583,7 @@ const Cashier = () => {
         throw new Error(paymentResponse.data.message || 'Failed to record settlement');
       }
     } catch (error: any) {
-      console.error('Error recording settlement:', error);
+      showNotification('Error recording settlement. Please try again.', false);
       showNotification(`Error: ${error.response?.data?.message || error.message || 'Failed to record settlement'}`, false);
     } finally {
       setLoading(false);
@@ -1576,19 +1601,39 @@ const Cashier = () => {
         return;
       }
       
-      showNotification('Sales receipts functionality is not fully implemented in the backend API. In a real implementation, this would record the sales receipt.', false);
-      
-      // Reset form
-      setSalesData({
-        receiptNo: `AUTO-GEN-${Math.floor(Math.random() * 9000 + 1000)}`,
-        date: new Date().toISOString().split('T')[0],
-        accHeadId: '',
-        amount: 0,
-        narration: '',
-        modeOfPaymentId: '',
+      // Create sales receipt using the new API
+      const response = await transactionApi.createSalesReceipt({
+        receiptNo: salesData.receiptNo,
+        date: salesData.date,
+        modeOfPaymentId: salesData.modeOfPaymentId,
+        amount: salesData.amount,
+        voucherNo: salesData.voucherNo,
+        narration: salesData.narration,
+        shiftNo: salesData.shiftNo,
+        shiftDate: salesData.shiftDate,
       });
+      
+      if (response.data.success) {
+        showNotification('Sales receipt recorded successfully!', true);
+        
+        // Reset form with new auto-generated receipt number
+        setSalesData({
+          receiptNo: `AUTO-GEN-${Math.floor(Math.random() * 9000 + 1000)}`,
+          date: new Date().toISOString().split('T')[0],
+          accHeadId: '',
+          amount: 0,
+          narration: '',
+          modeOfPaymentId: '',
+          voucherNo: '',
+          shiftNo: '1',
+          shiftDate: new Date().toISOString().split('T')[0],
+        });
+      } else {
+        throw new Error(response.data.message || 'Failed to record sales receipt');
+      }
     } catch (error: any) {
-      showNotification(`Error: ${error.response?.data?.message || 'Failed to record sales receipt'}`, false);
+      showNotification('Error recording sales receipt. Please try again.', false);
+      showNotification(`Error: ${error.response?.data?.message || error.message || 'Failed to record sales receipt'}`, false);
     } finally {
       setLoading(false);
     }
@@ -1720,18 +1765,7 @@ const Cashier = () => {
           </div>
         </div>
 
-        {/* Notifications */}
-        {successMessage && (
-          <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg flex items-center">
-            <CheckCircleIcon className="w-5 h-5 mr-2" />
-            {successMessage}
-          </div>
-        )}
-        {errorMessage && (
-          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
-            {errorMessage}
-          </div>
-        )}
+
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Main Content */}
@@ -2252,8 +2286,8 @@ const Cashier = () => {
                       >
                         <option value="">Select account head</option>
                         {accountHeads.map(head => (
-                          <option key={head.accountHeadId} value={head.accountHeadId}>
-                            {head.accountName}
+                          <option key={head.accHeadId} value={head.accHeadId}>
+                            {head.name}
                           </option>
                         ))}
                       </select>
@@ -2487,8 +2521,8 @@ const Cashier = () => {
                       >
                         <option value="">Select account head</option>
                         {accountHeads.map(head => (
-                          <option key={head.accountHeadId} value={head.accountHeadId}>
-                            {head.accountName}
+                          <option key={head.accHeadId} value={head.accHeadId}>
+                            {head.name}
                           </option>
                         ))}
                       </select>
@@ -2511,6 +2545,21 @@ const Cashier = () => {
                         required
                       />
                     </div>
+                    {/* Voucher Number */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Voucher Number
+                      </label>
+                      <input
+                        type="text"
+                        name="voucherNo"
+                        value={salesData.voucherNo}
+                        onChange={handleSalesInputChange}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {/* Narration */}
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -2523,8 +2572,6 @@ const Cashier = () => {
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       />
                     </div>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {/* Mode of Payment */}
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -2546,12 +2593,42 @@ const Cashier = () => {
                       </select>
                     </div>
                   </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Shift Number */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Shift Number
+                      </label>
+                      <input
+                        type="text"
+                        name="shiftNo"
+                        value={salesData.shiftNo}
+                        onChange={handleSalesInputChange}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        required
+                      />
+                    </div>
+                    {/* Shift Date */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Shift Date
+                      </label>
+                      <input
+                        type="date"
+                        name="shiftDate"
+                        value={salesData.shiftDate}
+                        onChange={handleSalesInputChange}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        required
+                      />
+                    </div>
+                  </div>
                   <div className="flex justify-end">
                     <button
                       type="submit"
                       className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
                     >
-                      {loading ? 'Processing...' : 'Record Sales'}
+                      {loading ? 'Processing...' : 'Record Sales Receipt'}
                     </button>
                   </div>
                 </form>
@@ -2702,6 +2779,19 @@ const Cashier = () => {
           </div>
         </div>
       </div>
+      <Modal
+        isOpen={modalOpen}
+        onClose={() => setModalOpen(false)}
+        title={modalTitle}
+        type={modalType}
+        onConfirm={modalAction || undefined}
+        confirmText={confirmText}
+        cancelText={cancelText}
+        showConfirmButton={showConfirmButton}
+        showCancelButton={showCancelButton}
+      >
+        <p>{modalMessage}</p>
+      </Modal>
     </Layout>
   );
 };

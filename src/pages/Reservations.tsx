@@ -3,6 +3,7 @@ import { Reservation, DeletedReservation, RoomType, Company, PlanType, Settlemen
 import { reservationApi, masterDataApi } from "../services/api";
 import Layout from "../components/Layout/Layout";
 import jsPDF from 'jspdf';
+import Modal from "../components/Modal";
 
 const Reservations: React.FC = () => {
   const [isCreating, setIsCreating] = useState(true);
@@ -57,6 +58,17 @@ const Reservations: React.FC = () => {
     refModeId: "",
     reservationSourceId: "",
   });
+
+  // Modal states
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modalTitle, setModalTitle] = useState('');
+  const [modalMessage, setModalMessage] = useState('');
+  const [modalType, setModalType] = useState<'info' | 'success' | 'warning' | 'error'>('info');
+  const [modalAction, setModalAction] = useState<(() => void) | null>(null);
+  const [showConfirmButton, setShowConfirmButton] = useState(true);
+  const [showCancelButton, setShowCancelButton] = useState(true);
+  const [confirmText, setConfirmText] = useState('Confirm');
+  const [cancelText, setCancelText] = useState('Cancel');
 
   useEffect(() => {
     if (!isCreating) {
@@ -358,18 +370,27 @@ const Reservations: React.FC = () => {
       }
 
       if (response.data.success) {
-        alert(editingReservation ? "Reservation updated successfully!" : "Reservation created successfully!");
-        handleClear();
-        if (!isCreating) {
-          fetchReservations(); // Refresh the reservations list
-        }
+        setModalTitle(editingReservation ? "Reservation Updated" : "Reservation Created");
+        setModalMessage(editingReservation ? "Reservation updated successfully!" : "Reservation created successfully!");
+        setModalType('success');
+        setModalAction(() => {
+          handleClear();
+          if (!isCreating) {
+            fetchReservations(); // Refresh the reservations list
+          }
+          return null;
+        });
+        setModalOpen(true);
       }
     } catch (error: any) {
-      alert(
+      setModalTitle("Error");
+      setModalMessage(
         `Error: ${
           error.response?.data?.message || (editingReservation ? "Failed to update reservation" : "Failed to create reservation")
         }`
       );
+      setModalType('error');
+      setModalOpen(true);
     } finally {
       setLoading(false);
     }
@@ -408,46 +429,88 @@ const Reservations: React.FC = () => {
   };
 
   const handleDelete = async (reservationId: string) => {
-    if (!window.confirm("Are you sure you want to delete this reservation?")) {
-      return;
-    }
+    setModalTitle("Confirm Deletion");
+    setModalMessage("Are you sure you want to delete this reservation?");
+    setModalType('warning');
+    setConfirmText("Delete");
+    setCancelText("Cancel");
+    setShowConfirmButton(true);
+    setShowCancelButton(true);
+    
+    setModalAction(() => () => {
+      handleDeleteConfirmed(reservationId);
+    });
+    
+    setModalOpen(true);
+  };
 
+  const handleDeleteConfirmed = async (reservationId: string) => {
     try {
       const response = await reservationApi.deleteReservation(reservationId);
       if (response.data.success) {
-        alert("Reservation deleted successfully!");
-        fetchReservations(); // Refresh the reservations list
+        setModalTitle("Reservation Deleted");
+        setModalMessage("Reservation deleted successfully!");
+        setModalType('success');
+        setModalAction(() => {
+          fetchReservations(); // Refresh the reservations list
+          return null;
+        });
+        setModalOpen(true);
       }
     } catch (error: any) {
-      alert(
+      setModalTitle("Error");
+      setModalMessage(
         `Error: ${
           error.response?.data?.message || "Failed to delete reservation"
         }`
       );
+      setModalType('error');
+      setModalOpen(true);
     }
   };
 
   const handleRestore = async (reservationId: string) => {
-    if (!window.confirm("Are you sure you want to restore this reservation?")) {
-      return;
-    }
+    setModalTitle("Confirm Restoration");
+    setModalMessage("Are you sure you want to restore this reservation?");
+    setModalType('warning');
+    setConfirmText("Restore");
+    setCancelText("Cancel");
+    setShowConfirmButton(true);
+    setShowCancelButton(true);
+    
+    setModalAction(() => () => {
+      handleRestoreConfirmed(reservationId);
+    });
+    
+    setModalOpen(true);
+  };
 
+  const handleRestoreConfirmed = async (reservationId: string) => {
     try {
       const response = await reservationApi.restoreReservation(reservationId);
       if (response.data.success) {
-        alert("Reservation restored successfully!");
-        fetchDeletedReservations(); // Refresh the deleted reservations list
-        // Also refresh the active reservations list
-        if (!isCreating) {
-          fetchReservations();
-        }
+        setModalTitle("Reservation Restored");
+        setModalMessage("Reservation restored successfully!");
+        setModalType('success');
+        setModalAction(() => {
+          fetchDeletedReservations(); // Refresh the deleted reservations list
+          // Also refresh the active reservations list
+          if (!isCreating) {
+            fetchReservations();
+          }
+          return null;
+        });
+        setModalOpen(true);
       }
     } catch (error: any) {
-      alert(
+      setModalTitle("Error");
+      setModalMessage(
         `Error: ${
           error.response?.data?.message || "Failed to restore reservation"
         }`
       );
+      setModalType('error');
+      setModalOpen(true);
     }
   };
 
@@ -675,7 +738,10 @@ const Reservations: React.FC = () => {
       pdf.save(fileName);
     } catch (error) {
       console.error('Error generating reservation slip PDF:', error);
-      alert('Failed to generate reservation slip. Please try again.');
+      setModalTitle('Error');
+      setModalMessage('Failed to generate reservation slip. Please try again.');
+      setModalType('error');
+      setModalOpen(true);
     }
   };
 
@@ -1727,6 +1793,19 @@ const Reservations: React.FC = () => {
           </div>
         )}
       </div>
+      <Modal
+        isOpen={modalOpen}
+        onClose={() => setModalOpen(false)}
+        title={modalTitle}
+        type={modalType}
+        onConfirm={modalAction || undefined}
+        confirmText={confirmText}
+        cancelText={cancelText}
+        showConfirmButton={showConfirmButton}
+        showCancelButton={showCancelButton}
+      >
+        {modalMessage}
+      </Modal>
     </Layout>
   );
 };

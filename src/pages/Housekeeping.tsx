@@ -13,6 +13,7 @@ import {
 import { housekeepingApi, roomApi, operationsApi } from '../services/api';
 import { HousekeepingTask, HousekeepingStats, Room } from '../types/api';
 import Layout from '../components/Layout/Layout';
+import Modal from '../components/Modal';
 
 const Housekeeping: React.FC = () => {
   const [tasks, setTasks] = useState<HousekeepingTask[]>([]);
@@ -46,7 +47,23 @@ const Housekeeping: React.FC = () => {
   
   // Shift Close states
   const [showShiftCloseModal, setShowShiftCloseModal] = useState(false);
+  const [shiftCloseData, setShiftCloseData] = useState({
+    openingBalance: 0,
+    totalIncome: 0,
+    totalExpense: 0
+  });
   const [shiftCloseBalance, setShiftCloseBalance] = useState(0);
+
+  // New modal states
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modalTitle, setModalTitle] = useState('');
+  const [modalMessage, setModalMessage] = useState('');
+  const [modalType, setModalType] = useState<'info' | 'success' | 'warning' | 'error'>('info');
+  const [modalAction, setModalAction] = useState<(() => void) | null>(null);
+  const [showConfirmButton, setShowConfirmButton] = useState(true);
+  const [showCancelButton, setShowCancelButton] = useState(true);
+  const [confirmText, setConfirmText] = useState('Confirm');
+  const [cancelText, setCancelText] = useState('Cancel');
 
   useEffect(() => {
     fetchAllData();
@@ -86,7 +103,10 @@ const Housekeeping: React.FC = () => {
         // Validate task ID
         const taskId = editingTask.taskId;
         if (!taskId || taskId <= 0) {
-          alert('Invalid task ID. Please try again.');
+          setModalTitle("Validation Error");
+          setModalMessage("Invalid task ID. Please try again.");
+          setModalType('error');
+          setModalOpen(true);
           setLoading(false);
           return;
         }
@@ -102,7 +122,10 @@ const Housekeeping: React.FC = () => {
         if (response.data.success) {
           // Refresh all data to ensure consistency
           await fetchAllData();
-          alert('Task updated successfully!');
+          setModalTitle("Task Updated");
+          setModalMessage("Task updated successfully!");
+          setModalType('success');
+          setModalOpen(true);
         } else {
           throw new Error(response.data.message || 'Failed to update task');
         }
@@ -119,7 +142,10 @@ const Housekeeping: React.FC = () => {
         if (response.data.success) {
           // Refresh all data to ensure the new task is properly displayed with all information
           await fetchAllData();
-          alert('Task created successfully!');
+          setModalTitle("Task Created");
+          setModalMessage("Task created successfully!");
+          setModalType('success');
+          setModalOpen(true);
         } else {
           throw new Error(response.data.message || 'Failed to create task');
         }
@@ -136,7 +162,10 @@ const Housekeeping: React.FC = () => {
       setShowTaskForm(false);
     } catch (error: any) {
       console.error('Task submission error:', error);
-      alert(`Error: ${error.response?.data?.message || error.message || 'Failed to save task'}`);
+      setModalTitle("Error");
+      setModalMessage(`Error: ${error.response?.data?.message || error.message || 'Failed to save task'}`);
+      setModalType('error');
+      setModalOpen(true);
     } finally {
       setLoading(false);
     }
@@ -162,7 +191,10 @@ const Housekeeping: React.FC = () => {
 
   const handleDeleteTask = async () => {
     if (!taskToDelete || taskToDelete <= 0) {
-      alert('Invalid task ID for deletion.');
+      setModalTitle("Validation Error");
+      setModalMessage("Invalid task ID for deletion.");
+      setModalType('error');
+      setModalOpen(true);
       return;
     }
     
@@ -172,13 +204,19 @@ const Housekeeping: React.FC = () => {
       if (response.data.success) {
         // Refresh all data to ensure consistency
         await fetchAllData();
-        alert('Task deleted successfully!');
+        setModalTitle("Task Deleted");
+        setModalMessage("Task deleted successfully!");
+        setModalType('success');
+        setModalOpen(true);
       } else {
         throw new Error(response.data.message || 'Failed to delete task');
       }
     } catch (error: any) {
       console.error('Delete task error:', error);
-      alert(`Error: ${error.response?.data?.message || error.message || 'Failed to delete task'}`);
+      setModalTitle("Error");
+      setModalMessage(`Error: ${error.response?.data?.message || error.message || 'Failed to delete task'}`);
+      setModalType('error');
+      setModalOpen(true);
     } finally {
       setLoading(false);
       setShowDeleteModal(false);
@@ -189,7 +227,10 @@ const Housekeeping: React.FC = () => {
   const handleUpdateRoomStatus = async (roomId: string, status: string) => {
     // Check if roomId is valid before making the API call
     if (!roomId || roomId === 'undefined') {
-      alert('Invalid room ID. Please try again.');
+      setModalTitle("Validation Error");
+      setModalMessage("Invalid room ID. Please try again.");
+      setModalType('error');
+      setModalOpen(true);
       return;
     }
     
@@ -203,13 +244,19 @@ const Housekeeping: React.FC = () => {
         ));
         // Refresh tasks and stats
         await fetchAllData();
-        alert('Room status updated successfully!');
+        setModalTitle("Status Updated");
+        setModalMessage("Room status updated successfully!");
+        setModalType('success');
+        setModalOpen(true);
       } else {
         throw new Error(response.data.message || 'Failed to update room status');
       }
     } catch (error: any) {
       console.error('Update room status error:', error);
-      alert(`Error: ${error.response?.data?.message || error.message || 'Failed to update room status'}`);
+      setModalTitle("Error");
+      setModalMessage(`Error: ${error.response?.data?.message || error.message || 'Failed to update room status'}`);
+      setModalType('error');
+      setModalOpen(true);
     } finally {
       setLoading(false);
     }
@@ -221,7 +268,10 @@ const Housekeeping: React.FC = () => {
     
     // Confirmation must be "YES" to proceed
     if (nightAuditConfirmation !== 'YES') {
-      alert('Please confirm by typing "YES" to proceed with night audit');
+      setModalTitle("Validation Error");
+      setModalMessage('Please confirm by typing "YES" to proceed with night audit');
+      setModalType('warning');
+      setModalOpen(true);
       return;
     }
     
@@ -230,14 +280,23 @@ const Housekeeping: React.FC = () => {
       const response = await operationsApi.auditDateChange(nightAuditConfirmation);
       
       if (response.data.success) {
-        alert(response.data.message || 'Night audit processed successfully! All checked-in rooms have been charged with room charges including SGST and CGST.');
-        // Reset form
-        setNightAuditConfirmation('');
-        setShowNightAuditModal(false);
-        // Refresh data if needed
-        await fetchAllData();
+        setModalTitle("Night Audit Complete");
+        setModalMessage(response.data.message || 'Night audit processed successfully! All checked-in rooms have been charged with room charges including SGST and CGST.');
+        setModalType('success');
+        setModalAction(() => {
+          // Reset form
+          setNightAuditConfirmation('');
+          setShowNightAuditModal(false);
+          // Refresh data if needed
+          fetchAllData();
+          return null;
+        });
+        setModalOpen(true);
       } else {
-        alert(response.data.message || 'Failed to process night audit');
+        setModalTitle("Night Audit Failed");
+        setModalMessage(response.data.message || 'Failed to process night audit');
+        setModalType('error');
+        setModalOpen(true);
       }
     } catch (error: any) {
       console.error('Failed to process night audit:', error);
@@ -259,7 +318,10 @@ const Housekeeping: React.FC = () => {
         errorMessage = error.message || errorMessage;
       }
       
-      alert(errorMessage);
+      setModalTitle("Error");
+      setModalMessage(errorMessage);
+      setModalType('error');
+      setModalOpen(true);
     } finally {
       setLoading(false);
     }
@@ -267,46 +329,67 @@ const Housekeeping: React.FC = () => {
 
   // Handle Day Close
   const handleDayClose = async () => {
-    if (!window.confirm('Are you sure you want to close the day and advance the audit date to the next calendar date?')) {
-      return;
-    }
+    setModalTitle("Confirm Day Close");
+    setModalMessage("Are you sure you want to close the day and advance the audit date to the next calendar date?");
+    setModalType('warning');
+    setConfirmText("Close Day");
+    setCancelText("Cancel");
+    setShowConfirmButton(true);
+    setShowCancelButton(true);
     
-    setLoading(true);
-    try {
-      // For Day Close, we automatically send "YES" confirmation to change the audit date
-      const response = await operationsApi.auditDateChange('YES');
-      
-      if (response.data.success) {
-        alert(response.data.message || 'Day closed successfully! The audit date has been advanced to the next calendar date.');
-        // Refresh data if needed
-        await fetchAllData();
-      } else {
-        alert(response.data.message || 'Failed to close the day');
-      }
-    } catch (error: any) {
-      console.error('Failed to close the day:', error);
-      let errorMessage = 'Failed to close the day. Please try again.';
-      
-      if (error.response) {
-        if (error.response.data?.message) {
-          errorMessage = error.response.data.message;
-        } else if (error.response.status === 400) {
-          errorMessage = 'Invalid request. Please check the data and try again.';
-        } else if (error.response.status === 401) {
-          errorMessage = 'Unauthorized. Please log in again.';
+    setModalAction(() => async () => {
+      setLoading(true);
+      try {
+        // For Day Close, we automatically send "YES" confirmation to change the audit date
+        const response = await operationsApi.auditDateChange('YES');
+        
+        if (response.data.success) {
+          setModalTitle("Day Closed");
+          setModalMessage(response.data.message || 'Day closed successfully! The audit date has been advanced to the next calendar date.');
+          setModalType('success');
+          setModalAction(() => {
+            // Refresh data if needed
+            fetchAllData();
+            return null;
+          });
+          setModalOpen(true);
         } else {
-          errorMessage = `Server error (${error.response.status}). Please try again.`;
+          setModalTitle("Day Close Failed");
+          setModalMessage(response.data.message || 'Failed to close the day');
+          setModalType('error');
+          setModalOpen(true);
         }
-      } else if (error.request) {
-        errorMessage = 'Network error. Please check your connection and try again.';
-      } else {
-        errorMessage = error.message || errorMessage;
+      } catch (error: any) {
+        console.error('Failed to close the day:', error);
+        let errorMessage = 'Failed to close the day. Please try again.';
+        
+        if (error.response) {
+          if (error.response.data?.message) {
+            errorMessage = error.response.data.message;
+          } else if (error.response.status === 400) {
+            errorMessage = 'Invalid request. Please check the data and try again.';
+          } else if (error.response.status === 401) {
+            errorMessage = 'Unauthorized. Please log in again.';
+          } else {
+            errorMessage = `Server error (${error.response.status}). Please try again.`;
+          }
+        } else if (error.request) {
+          errorMessage = 'Network error. Please check your connection and try again.';
+        } else {
+          errorMessage = error.message || errorMessage;
+        }
+        
+        setModalTitle("Error");
+        setModalMessage(errorMessage);
+        setModalType('error');
+        setModalOpen(true);
+      } finally {
+        setLoading(false);
       }
-      
-      alert(errorMessage);
-    } finally {
-      setLoading(false);
-    }
+      return null;
+    });
+    
+    setModalOpen(true);
   };
 
   // Handle Shift Close
@@ -315,17 +398,40 @@ const Housekeeping: React.FC = () => {
     
     setLoading(true);
     try {
-      const response = await operationsApi.shiftClose({ balance: shiftCloseBalance });
+      // Calculate the closing balance based on opening balance, income, and expenses
+      const calculatedClosingBalance = shiftCloseData.openingBalance + shiftCloseData.totalIncome - shiftCloseData.totalExpense;
+      
+      const response = await operationsApi.shiftClose({ 
+        balance: shiftCloseBalance,
+        openingBalance: shiftCloseData.openingBalance,
+        closingBalance: calculatedClosingBalance,
+        totalIncome: shiftCloseData.totalIncome,
+        totalExpense: shiftCloseData.totalExpense
+      });
       
       if (response.data.success) {
-        alert(response.data.message || 'Shift closed successfully! The closing balance has been calculated and stored in the shift table and shift has been changed.');
-        // Reset form
-        setShiftCloseBalance(0);
-        setShowShiftCloseModal(false);
-        // Refresh data if needed
-        await fetchAllData();
+        setModalTitle("Shift Closed");
+        setModalMessage(response.data.message || 'Shift closed successfully! The closing balance has been calculated and stored in the shift table and shift has been changed.');
+        setModalType('success');
+        setModalAction(() => {
+          // Reset form
+          setShiftCloseData({
+            openingBalance: 0,
+            totalIncome: 0,
+            totalExpense: 0
+          });
+          setShiftCloseBalance(0);
+          setShowShiftCloseModal(false);
+          // Refresh data if needed
+          fetchAllData();
+          return null;
+        });
+        setModalOpen(true);
       } else {
-        alert(response.data.message || 'Failed to close shift');
+        setModalTitle("Shift Close Failed");
+        setModalMessage(response.data.message || 'Failed to close shift');
+        setModalType('error');
+        setModalOpen(true);
       }
     } catch (error: any) {
       console.error('Failed to close shift:', error);
@@ -347,7 +453,10 @@ const Housekeeping: React.FC = () => {
         errorMessage = error.message || errorMessage;
       }
       
-      alert(errorMessage);
+      setModalTitle("Error");
+      setModalMessage(errorMessage);
+      setModalType('error');
+      setModalOpen(true);
     } finally {
       setLoading(false);
     }
@@ -938,16 +1047,16 @@ const Housekeeping: React.FC = () => {
           </div>
         )}
         
-        {/* Shift Close Modal */}
+        {/* Shift Close Modal - Updated to be more compact */}
         {showShiftCloseModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
-            <div className="bg-white rounded-lg shadow-lg p-6 w-full max-w-md">
-              <h2 className="text-xl font-bold mb-4">Shift Close</h2>
+            <div className="bg-white rounded-lg shadow-lg p-5 w-full max-w-md">
+              <h2 className="text-xl font-bold mb-3">Shift Close</h2>
               <div className="mb-4">
-                <p className="text-gray-700 mb-4">
+                <p className="text-gray-700 text-sm mb-3">
                   When you confirm the shift close, the closing balance for the shift will be calculated and stored in the shift table and shift will be changed.
                 </p>
-                <div className="bg-green-50 border-l-4 border-green-400 p-4 mb-4">
+                <div className="bg-green-50 border-l-4 border-green-400 p-3 mb-3">
                   <div className="flex">
                     <div className="flex-shrink-0">
                       <svg className="h-5 w-5 text-green-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
@@ -955,7 +1064,7 @@ const Housekeeping: React.FC = () => {
                       </svg>
                     </div>
                     <div className="ml-3">
-                      <p className="text-sm text-green-700">
+                      <p className="text-xs text-green-700">
                         <strong>Automatic Shift Management:</strong> This feature automatically handles shift rotation logic. 
                         If closing a regular shift, the running shift will increment. If closing the last shift, 
                         the shift date will advance and the running shift will reset to 1.
@@ -964,8 +1073,64 @@ const Housekeeping: React.FC = () => {
                   </div>
                 </div>
                 <form onSubmit={handleShiftClose}>
-                  <div className="mb-4">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <div className="grid grid-cols-2 gap-3 mb-3">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                        Opening Balance
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={shiftCloseData.openingBalance}
+                        onChange={(e) => setShiftCloseData({...shiftCloseData, openingBalance: parseFloat(e.target.value) || 0})}
+                        className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="0.00"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                        Total Income
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={shiftCloseData.totalIncome}
+                        onChange={(e) => setShiftCloseData({...shiftCloseData, totalIncome: parseFloat(e.target.value) || 0})}
+                        className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="0.00"
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3 mb-3">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                        Total Expense
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={shiftCloseData.totalExpense}
+                        onChange={(e) => setShiftCloseData({...shiftCloseData, totalExpense: parseFloat(e.target.value) || 0})}
+                        className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="0.00"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                        Closing Balance
+                      </label>
+                      <input
+                        type="number"
+                        step="0.01"
+                        value={shiftCloseData.openingBalance + shiftCloseData.totalIncome - shiftCloseData.totalExpense}
+                        readOnly
+                        className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-md bg-gray-100 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-transparent"
+                        placeholder="0.00"
+                      />
+                    </div>
+                  </div>
+                  <div className="mb-3">
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
                       Shift Balance <span className="text-red-500">*</span>
                     </label>
                     <input
@@ -974,27 +1139,32 @@ const Housekeeping: React.FC = () => {
                       value={shiftCloseBalance}
                       onChange={(e) => setShiftCloseBalance(parseFloat(e.target.value) || 0)}
                       required
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-transparent"
                       placeholder="Enter shift balance"
                     />
                   </div>
-                  <div className="flex justify-end space-x-3">
+                  <div className="flex justify-end space-x-2">
                     <button
                       type="button"
                       onClick={() => {
                         setShowShiftCloseModal(false);
                         setShiftCloseBalance(0);
+                        setShiftCloseData({
+                          openingBalance: 0,
+                          totalIncome: 0,
+                          totalExpense: 0
+                        });
                       }}
-                      className="px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors"
+                      className="px-3 py-1.5 text-sm border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors"
                     >
                       Cancel
                     </button>
                     <button
                       type="submit"
                       disabled={loading}
-                      className="px-4 py-2 bg-gradient-to-r from-green-600 to-green-700 text-white rounded-md hover:from-green-700 hover:to-green-800 disabled:opacity-50 transition-all"
+                      className="px-3 py-1.5 text-sm bg-gradient-to-r from-green-600 to-green-700 text-white rounded-md hover:from-green-700 hover:to-green-800 disabled:opacity-50 transition-all"
                     >
-                      {loading ? 'Closing Shift...' : 'Close Shift'}
+                      {loading ? 'Closing...' : 'Close Shift'}
                     </button>
                   </div>
                 </form>
@@ -1003,6 +1173,19 @@ const Housekeeping: React.FC = () => {
           </div>
         )}
       </div>
+      <Modal
+        isOpen={modalOpen}
+        onClose={() => setModalOpen(false)}
+        title={modalTitle}
+        type={modalType}
+        onConfirm={modalAction || undefined}
+        confirmText={confirmText}
+        cancelText={cancelText}
+        showConfirmButton={showConfirmButton}
+        showCancelButton={showCancelButton}
+      >
+        {modalMessage}
+      </Modal>
     </Layout>
   );
 };

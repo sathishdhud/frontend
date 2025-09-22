@@ -25,7 +25,13 @@ const Admin: React.FC = () => {
 
   // Form states
   const [taxForm, setTaxForm] = useState({ taxName: '', percentage: '' });
-  const [accountHeadForm, setAccountHeadForm] = useState({ accountName: '' });
+  const [accountHeadForm, setAccountHeadForm] = useState({ 
+    accHeadId: `ACC${Math.floor(Math.random() * 9000 + 1000)}`,
+    name: '',
+    companyName: '',
+    chequeNumber: '',
+    date: new Date().toISOString().split('T')[0]
+  });
   const [roomForm, setRoomForm] = useState({ roomNo: '', floor: '', roomTypeId: '' });
   const [roomTypeForm, setRoomTypeForm] = useState({ typeName: '', noOfRooms: '' });
   const [paymentModeForm, setPaymentModeForm] = useState({ id: '', name: '' });
@@ -83,7 +89,10 @@ const Admin: React.FC = () => {
     balance: 0 
   });
   const [shiftCloseForm, setShiftCloseForm] = useState({ 
-    balance: 0 
+    balance: 0,
+    openingBalance: 0,
+    totalIncome: 0,
+    totalExpense: 0
   });
   const [operationsLoading, setOperationsLoading] = useState(false);
   const [operationsSuccess, setOperationsSuccess] = useState('');
@@ -289,7 +298,7 @@ const Admin: React.FC = () => {
           break;
         case 'Account Head':
           if (editingAccountHead) {
-            response = await masterDataApi.updateAccountHead(editingAccountHead.accountHeadId, formData);
+            response = await masterDataApi.updateAccountHead(editingAccountHead.accHeadId, formData);
           } else {
             response = await masterDataApi.createAccountHead(formData);
           }
@@ -368,7 +377,7 @@ const Admin: React.FC = () => {
           setEditingTax(null);
           break;
         case 'Account Head':
-          setAccountHeadForm({ accountName: '' });
+          setAccountHeadForm({ accHeadId: `ACC${Math.floor(Math.random() * 9000 + 1000)}`, name: '', companyName: '', chequeNumber: '', date: new Date().toISOString().split('T')[0] });
           setEditingAccountHead(null);
           break;
         case 'Room Type':
@@ -431,7 +440,13 @@ const Admin: React.FC = () => {
         break;
       case 'Account Head':
         setEditingAccountHead(item);
-        setAccountHeadForm({ accountName: item.accountName });
+        setAccountHeadForm({ 
+          accHeadId: item.accHeadId,
+          name: item.name,
+          companyName: item.companyName || '',
+          chequeNumber: item.chequeNumber || '',
+          date: item.date || ''
+        });
         break;
       case 'Room Type':
         setEditingRoomType(item);
@@ -544,9 +559,9 @@ const Admin: React.FC = () => {
           }
           break;
         case 'Account Head':
-          if (editingAccountHead && editingAccountHead.accountHeadId === id) {
+          if (editingAccountHead && editingAccountHead.accHeadId === id) {
             setEditingAccountHead(null);
-            setAccountHeadForm({ accountName: '' });
+            setAccountHeadForm({ accHeadId: `ACC${Math.floor(Math.random() * 9000 + 1000)}`, name: '', companyName: '', chequeNumber: '', date: new Date().toISOString().split('T')[0] });
           }
           break;
         case 'Room Type':
@@ -731,13 +746,24 @@ const Admin: React.FC = () => {
     setOperationsLoading(true);
     
     try {
-      const response = await operationsApi.shiftClose(shiftCloseForm);
+      // Calculate the closing balance based on opening balance, income, and expenses
+      const calculatedClosingBalance = shiftCloseForm.openingBalance + shiftCloseForm.totalIncome - shiftCloseForm.totalExpense;
+      
+      const response = await operationsApi.shiftClose({
+        balance: shiftCloseForm.balance,
+        closingBalance: calculatedClosingBalance,
+        totalIncome: shiftCloseForm.totalIncome,
+        totalExpense: shiftCloseForm.totalExpense
+      });
       
       if (response.data.success) {
         showOperationsNotification(response.data.message || 'Shift closed successfully!');
         // Reset form to default values
         setShiftCloseForm({ 
-          balance: 0 
+          balance: 0,
+          openingBalance: 0,
+          totalIncome: 0,
+          totalExpense: 0
         });
         // Refresh data if needed
         fetchMasterData();
@@ -832,7 +858,7 @@ const Admin: React.FC = () => {
                     setEditingTax(null);
                     break;
                   case 'Account Head':
-                    setAccountHeadForm({ accountName: '' });
+                    setAccountHeadForm({ accHeadId: `ACC${Math.floor(Math.random() * 9000 + 1000)}`, name: '', companyName: '', chequeNumber: '', date: new Date().toISOString().split('T')[0] });
                     setEditingAccountHead(null);
                     break;
                   case 'Room Type':
@@ -969,7 +995,7 @@ const Admin: React.FC = () => {
   const getIdKey = (type: string): string => {
     switch (type) {
       case 'Tax': return 'taxId';
-      case 'Account Head': return 'accountHeadId';
+      case 'Account Head': return 'accHeadId';
       case 'Room Type': return 'typeId';
       case 'Payment Mode': return 'id';
       case 'Plan Type': return 'planId';
@@ -1320,6 +1346,58 @@ const Admin: React.FC = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
+                Opening Balance
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                value={shiftCloseForm.openingBalance}
+                onChange={(e) => setShiftCloseForm({ ...shiftCloseForm, openingBalance: parseFloat(e.target.value) || 0 })}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                placeholder="Enter opening balance"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Total Income
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                value={shiftCloseForm.totalIncome}
+                onChange={(e) => setShiftCloseForm({ ...shiftCloseForm, totalIncome: parseFloat(e.target.value) || 0 })}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                placeholder="Enter total income"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Total Expense
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                value={shiftCloseForm.totalExpense}
+                onChange={(e) => setShiftCloseForm({ ...shiftCloseForm, totalExpense: parseFloat(e.target.value) || 0 })}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                placeholder="Enter total expense"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Calculated Closing Balance
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                value={shiftCloseForm.openingBalance + shiftCloseForm.totalIncome - shiftCloseForm.totalExpense}
+                readOnly
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all duration-200"
+                placeholder="Calculated closing balance"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
                 Shift Balance <span className="text-red-500">*</span>
               </label>
               <input
@@ -1460,12 +1538,18 @@ const Admin: React.FC = () => {
                 setAccountHeadForm,
                 (e) => handleMasterDataFormSubmit(e, 'Account Head', accountHeadForm),
                 [
-                  { label: 'Account Name', name: 'accountName', required: true }
+                  { label: 'Account Name', name: 'name', required: true },
+                  { label: 'Company Name', name: 'companyName', required: false },
+                  { label: 'Cheque Number', name: 'chequeNumber', required: false },
+                  { label: 'Date', name: 'date', type: 'date', required: false }
                 ],
                 !!editingAccountHead
               )}
               {renderMasterDataList('Account Heads', accountHeads, [
-                { header: 'Account Name', key: 'accountName', render: (item: AccountHead) => item.accountName || '-' }
+                { header: 'Account Name', key: 'name', render: (item: AccountHead) => item.name || '-' },
+                { header: 'Company Name', key: 'companyName', render: (item: AccountHead) => item.companyName || '-' },
+                { header: 'Cheque Number', key: 'chequeNumber', render: (item: AccountHead) => item.chequeNumber || '-' },
+                { header: 'Date', key: 'date', render: (item: AccountHead) => item.date || '-' }
               ], 'Account Head')}
             </>
           )}

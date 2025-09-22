@@ -63,10 +63,10 @@ const TransactionForm: React.FC = () => {
                 if (res.data.success) {
                     // Map account head names to transactions
                     const transactionsWithNames = res.data.data.map((transaction: any) => {
-                        const accountHead = accountHeads.find(ah => ah.accountHeadId === transaction.accHeadId);
+                        const accountHead = accountHeads.find(ah => ah.accHeadId === transaction.accHeadId);
                         return {
                             ...transaction,
-                            accHeadName: accountHead ? accountHead.accountName : transaction.accHeadName || 'Unknown'
+                            accHeadName: accountHead ? accountHead.name : transaction.accHeadName || 'Unknown'
                         };
                     });
                     setTransactions(transactionsWithNames);
@@ -185,8 +185,8 @@ const TransactionForm: React.FC = () => {
                             >
                                 <option value="">Select Account Head</option>
                                 {accountHeads.map(accountHead => (
-                                    <option key={accountHead.accountHeadId} value={accountHead.accountHeadId}>
-                                        {accountHead.accountName}
+                                    <option key={accountHead.accHeadId} value={accountHead.accHeadId}>
+                                        {accountHead.name}
                                     </option>
                                 ))}
                             </select>

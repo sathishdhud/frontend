@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ArrowsRightLeftIcon, CheckCircleIcon } from '@heroicons/react/24/outline';
-import { CheckIn as CheckInType, Room, Advance } from '../types/api';
-import { checkInApi, roomApi, advanceApi, reservationApi } from '../services/api';
+import { CheckIn as CheckInType, Room, Advance, RoomType, Company, PlanType, SettlementType, ArrivalMode, Nationality, RefMode, ReservationSource } from '../types/api';
+import { checkInApi, roomApi, advanceApi, reservationApi, masterDataApi } from '../services/api';
 import Layout from '../components/Layout/Layout';
+import Modal from '../components/Modal';
 
 const CheckIn: React.FC = () => {
   const [isWalkIn, setIsWalkIn] = useState(false);
@@ -16,6 +17,31 @@ const CheckIn: React.FC = () => {
   // Add notification states
   const [successMessage, setSuccessMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
+  // Add state for tabs
+  const [activeTab, setActiveTab] = useState<'basic' | 'additional'>('basic');
+  
+  // Add master data states
+  const [roomTypes, setRoomTypes] = useState<RoomType[]>([]);
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [planTypes, setPlanTypes] = useState<PlanType[]>([]);
+  const [settlementTypes, setSettlementTypes] = useState<SettlementType[]>([]);
+  const [arrivalModes, setArrivalModes] = useState<ArrivalMode[]>([]);
+  const [nationalities, setNationalities] = useState<Nationality[]>([]);
+  const [refModes, setRefModes] = useState<RefMode[]>([]);
+  const [reservationSources, setReservationSources] = useState<ReservationSource[]>([]);
+  const [masterDataLoading, setMasterDataLoading] = useState(false);
+  const [masterDataFetched, setMasterDataFetched] = useState(false);
+
+  // Modal states
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modalTitle, setModalTitle] = useState('');
+  const [modalMessage, setModalMessage] = useState('');
+  const [modalType, setModalType] = useState<'info' | 'success' | 'warning' | 'error'>('info');
+  const [modalAction, setModalAction] = useState<(() => void) | null>(null);
+  const [showConfirmButton, setShowConfirmButton] = useState(true);
+  const [showCancelButton, setShowCancelButton] = useState(true);
+  const [confirmText, setConfirmText] = useState('Confirm');
+  const [cancelText, setCancelText] = useState('Cancel');
 
   // Add a ref for debouncing
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
@@ -32,6 +58,20 @@ const CheckIn: React.FC = () => {
     roomId: '',
     remarks: '',
     includingGst: true,
+    // Additional details fields
+    emailId: '',
+    idProof1: '',
+    idProof2: '',
+    idProof3: '',
+    companyId: '',
+    planId: '',
+    roomTypeId: '',
+    settlementTypeId: '',
+    arrivalModeId: '',
+    arrivalDetails: '',
+    nationalityId: '',
+    refModeId: '',
+    resvSourceId: '',
   });
 
   // Function to show notifications
@@ -82,6 +122,78 @@ const CheckIn: React.FC = () => {
       fetchReservationInfo(formData.reservationNo);
     }
   }, [isWalkIn]);
+
+  // Fetch master data on component mount and when additional tab is opened
+  useEffect(() => {
+    if (activeTab === 'additional' && !masterDataFetched) {
+      fetchMasterData();
+    }
+  }, [activeTab, masterDataFetched]);
+
+  const fetchMasterData = async () => {
+    setMasterDataLoading(true);
+    try {
+      // Fetch all master data in parallel
+      const [
+        roomTypesRes,
+        companiesRes,
+        planTypesRes,
+        settlementTypesRes,
+        arrivalModesRes,
+        nationalitiesRes,
+        refModesRes,
+        reservationSourcesRes
+      ] = await Promise.all([
+        masterDataApi.getRoomTypes(),
+        masterDataApi.getCompanies(),
+        masterDataApi.getPlanTypes(),
+        masterDataApi.getSettlementTypes(),
+        masterDataApi.getArrivalModes(),
+        masterDataApi.getNationalities(),
+        masterDataApi.getRefModes(),
+        masterDataApi.getReservationSources()
+      ]);
+
+      // Set data for successful requests
+      if (roomTypesRes.data.success) {
+        setRoomTypes(roomTypesRes.data.data);
+      }
+      
+      if (companiesRes.data.success) {
+        setCompanies(companiesRes.data.data);
+      }
+      
+      if (planTypesRes.data.success) {
+        setPlanTypes(planTypesRes.data.data);
+      }
+      
+      if (settlementTypesRes.data.success) {
+        setSettlementTypes(settlementTypesRes.data.data);
+      }
+      
+      if (arrivalModesRes.data.success) {
+        setArrivalModes(arrivalModesRes.data.data);
+      }
+      
+      if (nationalitiesRes.data.success) {
+        setNationalities(nationalitiesRes.data.data);
+      }
+      
+      if (refModesRes.data.success) {
+        setRefModes(refModesRes.data.data);
+      }
+      
+      if (reservationSourcesRes.data.success) {
+        setReservationSources(reservationSourcesRes.data.data);
+      }
+      
+      setMasterDataFetched(true);
+    } catch (error) {
+      console.error('Failed to fetch master data:', error);
+    } finally {
+      setMasterDataLoading(false);
+    }
+  };
 
   const fetchAvailableRooms = async () => {
     try {
@@ -149,7 +261,7 @@ const CheckIn: React.FC = () => {
       // Search for reservations by reservation number
       const response = await reservationApi.searchReservations(reservationNo.trim());
       if (response.data.success && response.data.data.length > 0) {
-        // Find the exact match for the reservation number (case-insensitive)
+        // Find the exact match for the reservation number
         const reservation = response.data.data.find((r: any) => 
           r.reservationNo.toLowerCase() === reservationNo.trim().toLowerCase()
         );
@@ -169,7 +281,21 @@ const CheckIn: React.FC = () => {
             noOfPersons: reservation.noOfPersons || 1,
             mobileNumber: reservation.mobileNumber || '',
             rate: reservation.rate || 0,
-            includingGst: reservation.includingGst === 'Y'
+            includingGst: reservation.includingGst === 'Y',
+            // Additional details from reservation
+            emailId: reservation.emailId || '',
+            idProof1: reservation.idProof1 || '',
+            idProof2: reservation.idProof2 || '',
+            idProof3: reservation.idProof3 || '',
+            companyId: reservation.companyId || '',
+            planId: reservation.planId || '',
+            roomTypeId: reservation.roomTypeId || '',
+            settlementTypeId: reservation.settlementTypeId || '',
+            arrivalModeId: reservation.arrivalModeId || '',
+            arrivalDetails: reservation.arrivalDetails || '',
+            nationalityId: reservation.nationalityId || '',
+            refModeId: reservation.refModeId || '',
+            resvSourceId: reservation.reservationSourceId || '',
           }));
         } else {
           setFormData(prev => ({ ...prev, guestName: '' }));
@@ -278,13 +404,19 @@ const CheckIn: React.FC = () => {
     try {
       // Validate required fields
       if (!formData.guestName.trim()) {
-        showNotification('Please enter a guest name or select a valid reservation number', false);
+        setModalTitle("Validation Error");
+        setModalMessage("Please enter a guest name or select a valid reservation number");
+        setModalType('warning');
+        setModalOpen(true);
         setLoading(false);
         return;
       }
       
       if (!formData.roomId) {
-        showNotification('Please select a room', false);
+        setModalTitle("Validation Error");
+        setModalMessage("Please select a room");
+        setModalType('warning');
+        setModalOpen(true);
         setLoading(false);
         return;
       }
@@ -293,7 +425,10 @@ const CheckIn: React.FC = () => {
       if (!isWalkIn && formData.reservationNo) {
         const validation = await canCheckInToReservation(formData.reservationNo);
         if (!validation.canCheckIn) {
-          showNotification(validation.message || 'Cannot check in to this reservation.', false);
+          setModalTitle("Check-In Not Allowed");
+          setModalMessage(validation.message || 'Cannot check in to this reservation.');
+          setModalType('warning');
+          setModalOpen(true);
           setLoading(false);
           return;
         }
@@ -306,9 +441,22 @@ const CheckIn: React.FC = () => {
         arrivalDate: formData.arrivalDate,
         departureDate: formData.departureDate,
         mobileNumber: formData.mobileNumber,
+        emailId: formData.emailId,
         rate: formData.rate,
         walkIn: isWalkIn ? 'Y' as const : 'N' as const,
         remarks: formData.remarks,
+        idProof1: formData.idProof1,
+        idProof2: formData.idProof2,
+        idProof3: formData.idProof3,
+        companyId: formData.companyId,
+        planId: formData.planId,
+        roomTypeId: formData.roomTypeId,
+        settlementTypeId: formData.settlementTypeId,
+        arrivalModeId: formData.arrivalModeId,
+        arrivalDetails: formData.arrivalDetails,
+        nationalityId: formData.nationalityId,
+        refModeId: formData.refModeId,
+        resvSourceId: formData.resvSourceId,
       };
 
       const response = await checkInApi.processCheckIn(checkInData);
@@ -334,30 +482,56 @@ const CheckIn: React.FC = () => {
               }
             }
           } catch (error) {
-            showNotification('Failed to update reservation count, but check-in was successful.', false);
+            setModalTitle("Warning");
+            setModalMessage("Failed to update reservation count, but check-in was successful.");
+            setModalType('warning');
+            setModalOpen(true);
             // Don't fail the check-in if we can't update the reservation count
           }
         }
         
-        showNotification('Check-in processed successfully!');
-        // Reset form
-        setFormData({
-          reservationNo: '',
-          guestName: '',
-          arrivalDate: '',
-          departureDate: '',
-          noOfDays: 1,
-          noOfPersons: 1,
-          mobileNumber: '',
-          rate: 0,
-          roomId: '',
-          remarks: '',
-          includingGst: true,
+        setModalTitle("Check-In Successful");
+        setModalMessage("Check-in processed successfully!");
+        setModalType('success');
+        setModalAction(() => {
+          // Reset form
+          setFormData({
+            reservationNo: '',
+            guestName: '',
+            arrivalDate: '',
+            departureDate: '',
+            noOfDays: 1,
+            noOfPersons: 1,
+            mobileNumber: '',
+            rate: 0,
+            roomId: '',
+            remarks: '',
+            includingGst: true,
+            // Additional details fields
+            emailId: '',
+            idProof1: '',
+            idProof2: '',
+            idProof3: '',
+            companyId: '',
+            planId: '',
+            roomTypeId: '',
+            settlementTypeId: '',
+            arrivalModeId: '',
+            arrivalDetails: '',
+            nationalityId: '',
+            refModeId: '',
+            resvSourceId: '',
+          });
+          setAdvances([]); // Clear advances as well
+          return null;
         });
-        setAdvances([]); // Clear advances as well
+        setModalOpen(true);
       }
     } catch (error: any) {
-      showNotification(`Error: ${error.response?.data?.message || 'Failed to process check-in'}`, false);
+      setModalTitle("Error");
+      setModalMessage(`Error: ${error.response?.data?.message || 'Failed to process check-in'}`);
+      setModalType('error');
+      setModalOpen(true);
     } finally {
       setLoading(false);
     }
@@ -376,6 +550,20 @@ const CheckIn: React.FC = () => {
       roomId: '',
       remarks: '',
       includingGst: true,
+      // Additional details fields
+      emailId: '',
+      idProof1: '',
+      idProof2: '',
+      idProof3: '',
+      companyId: '',
+      planId: '',
+      roomTypeId: '',
+      settlementTypeId: '',
+      arrivalModeId: '',
+      arrivalDetails: '',
+      nationalityId: '',
+      refModeId: '',
+      resvSourceId: '',
     });
     setAdvances([]);
     setReservationInfo(null);
@@ -389,6 +577,39 @@ const CheckIn: React.FC = () => {
     // Clear notifications
     setSuccessMessage('');
     setErrorMessage('');
+    // Reset master data fetch state
+    setMasterDataFetched(false);
+  };
+
+  // Render a dropdown with consistent loading and error handling
+  const renderDropdown = (
+    name: string,
+    label: string,
+    options: any[],
+    valueKey: string,
+    labelKey: string,
+    placeholder: string = `Select ${label}`
+  ) => {
+    const value = formData[name as keyof typeof formData];
+    return (
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
+        <select
+          name={name}
+          value={value !== undefined && value !== null && typeof value !== 'boolean' ? value.toString() : ''}
+          onChange={handleInputChange}
+          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          disabled={masterDataLoading}
+        >
+          <option value="">{masterDataLoading ? 'Loading...' : placeholder}</option>
+          {options.map((option) => (
+            <option key={option[valueKey]} value={option[valueKey]}>
+              {option[labelKey]}
+            </option>
+          ))}
+        </select>
+      </div>
+    );
   };
 
   return (
@@ -441,18 +662,97 @@ const CheckIn: React.FC = () => {
             </div>
 
             <form onSubmit={handleSubmit} className="p-6">
+              {/* Tabs */}
+              <div className="border-b border-gray-200 mb-6">
+                <nav className="-mb-px flex space-x-8">
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('basic')}
+                    className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                      activeTab === 'basic'
+                        ? 'border-blue-500 text-blue-600'
+                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    }`}
+                  >
+                    Basic Information
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('additional')}
+                    className={`py-2 px-1 border-b-2 font-medium text-sm ${
+                      activeTab === 'additional'
+                        ? 'border-blue-500 text-blue-600'
+                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    }`}
+                  >
+                    Additional Details
+                  </button>
+                </nav>
+              </div>
+
+              {/* Tab Content */}
+              {activeTab === 'basic' ? (
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                {/* Reservation Number */}
-                {!isWalkIn && (
-                  <div className="md:col-span-3">
+                  {/* Reservation Number */}
+                  {!isWalkIn && (
+                    <div className="md:col-span-3">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Reservation Number
+                      </label>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          name="reservationNo"
+                          value={formData.reservationNo}
+                          onChange={handleInputChange}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        />
+                        {autoFillLoading && (
+                          <div className="absolute inset-y-0 right-0 flex items-center pr-3">
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                          </div>
+                        )}
+                      </div>
+                      {/* Reservation Info Display */}
+                      {reservationInfo && (
+                        <div className="mt-2 p-3 bg-blue-50 rounded-lg border border-blue-100">
+                          <div className="flex justify-between items-center">
+                            <div>
+                              <p className="text-sm font-medium text-blue-800">{reservationInfo.guestName}</p>
+                              <p className="text-xs text-blue-600">
+                                Rooms: {reservationInfo.noOfRooms} | 
+                                Checked In: {reservationInfo.roomsCheckedIn || 0} | 
+                                Remaining: {reservationInfo.noOfRooms - (reservationInfo.roomsCheckedIn || 0)}
+                              </p>
+                            </div>
+                            <div>
+                              {reservationInfo.roomsCheckedIn >= reservationInfo.noOfRooms ? (
+                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                                  Full
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                  Available
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Guest Name */}
+                  <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Reservation Number
+                      Guest Name
                     </label>
                     <div className="relative">
                       <input
                         type="text"
-                        name="reservationNo"
-                        value={formData.reservationNo}
+                        name="guestName"
+                        required
+                        value={formData.guestName}
                         onChange={handleInputChange}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       />
@@ -462,203 +762,247 @@ const CheckIn: React.FC = () => {
                         </div>
                       )}
                     </div>
-                    {/* Reservation Info Display */}
-                    {reservationInfo && (
-                      <div className="mt-2 p-3 bg-blue-50 rounded-lg border border-blue-100">
-                        <div className="flex justify-between items-center">
-                          <div>
-                            <p className="text-sm font-medium text-blue-800">{reservationInfo.guestName}</p>
-                            <p className="text-xs text-blue-600">
-                              Rooms: {reservationInfo.noOfRooms} | 
-                              Checked In: {reservationInfo.roomsCheckedIn || 0} | 
-                              Remaining: {reservationInfo.noOfRooms - (reservationInfo.roomsCheckedIn || 0)}
-                            </p>
-                          </div>
-                          <div>
-                            {reservationInfo.roomsCheckedIn >= reservationInfo.noOfRooms ? (
-                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
-                                Full
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                                Available
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    )}
                   </div>
-                )}
-
-                {/* Guest Name */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Guest Name
-                  </label>
-                  <div className="relative">
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                  {/* Additional Details Fields */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Email ID</label>
                     <input
-                      type="text"
-                      name="guestName"
-                      required
-                      value={formData.guestName}
+                      type="email"
+                      name="emailId"
+                      value={formData.emailId}
                       onChange={handleInputChange}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="Enter email address"
                     />
-                    {autoFillLoading && (
-                      <div className="absolute inset-y-0 right-0 flex items-center pr-3">
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
-                      </div>
-                    )}
                   </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">ID Proof 1</label>
+                    <input
+                      type="text"
+                      name="idProof1"
+                      value={formData.idProof1}
+                      onChange={handleInputChange}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="e.g., Passport: P12345678"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">ID Proof 2</label>
+                    <input
+                      type="text"
+                      name="idProof2"
+                      value={formData.idProof2}
+                      onChange={handleInputChange}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="e.g., Driving License: DL987654321"
+                    />
+                  </div>
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">ID Proof 3</label>
+                    <input
+                      type="text"
+                      name="idProof3"
+                      value={formData.idProof3}
+                      onChange={handleInputChange}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="e.g., Aadhar Card: 1234-5678-9012"
+                    />
+                  </div>
+                  
+                  {/* Company Dropdown */}
+                  {renderDropdown("companyId", "Company", companies, "companyId", "companyName", "Select Company")}
+                  
+                  {/* Plan Type Dropdown */}
+                  {renderDropdown("planId", "Plan Type", planTypes, "planId", "planName", "Select Plan")}
+                  
+                  {/* Room Type Dropdown */}
+                  {renderDropdown("roomTypeId", "Room Type", roomTypes, "typeId", "typeName", "Select Room Type")}
+                  
+                  {/* Settlement Type Dropdown */}
+                  {renderDropdown("settlementTypeId", "Settlement Type", settlementTypes, "id", "name", "Select Settlement Type")}
+                  
+                  {/* Arrival Mode Dropdown */}
+                  {renderDropdown("arrivalModeId", "Arrival Mode", arrivalModes, "id", "arrivalMode", "Select Arrival Mode")}
+                  
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Arrival Details</label>
+                    <input
+                      type="text"
+                      name="arrivalDetails"
+                      value={formData.arrivalDetails}
+                      onChange={handleInputChange}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="e.g., Flight AA123 at 14:30"
+                    />
+                  </div>
+                  
+                  {/* Nationality Dropdown */}
+                  {renderDropdown("nationalityId", "Nationality", nationalities, "id", "nationality", "Select Nationality")}
+                  
+                  {/* Ref Mode Dropdown */}
+                  {renderDropdown("refModeId", "Ref Mode", refModes, "id", "refMode", "Select Ref Mode")}
+                  
+                  {/* Reservation Source Dropdown */}
+                  {renderDropdown("resvSourceId", "Reservation Source", reservationSources, "id", "resvSource", "Select Reservation Source")}
                 </div>
-              </div>
+              )}
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                {/* Arrival Date */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Arrival Date
-                  </label>
-                  <input
-                    type="date"
-                    name="arrivalDate"
-                    required
-                    value={formData.arrivalDate}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
+              {/* Common fields that appear in both tabs */}
+              {activeTab === 'basic' && (
+                <>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                    {/* Arrival Date */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Arrival Date
+                      </label>
+                      <input
+                        type="date"
+                        name="arrivalDate"
+                        required
+                        value={formData.arrivalDate}
+                        onChange={handleInputChange}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
 
-                {/* Departure Date */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Departure Date
-                  </label>
-                  <input
-                    type="date"
-                    name="departureDate"
-                    required
-                    value={formData.departureDate}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
+                    {/* Departure Date */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Departure Date
+                      </label>
+                      <input
+                        type="date"
+                        name="departureDate"
+                        required
+                        value={formData.departureDate}
+                        onChange={handleInputChange}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
 
-                {/* No of Days */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    No of Days
-                  </label>
-                  <input
-                    type="number"
-                    name="noOfDays"
-                    min="1"
-                    value={formData.noOfDays}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
-              </div>
+                    {/* No of Days */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        No of Days
+                      </label>
+                      <input
+                        type="number"
+                        name="noOfDays"
+                        min="1"
+                        value={formData.noOfDays}
+                        onChange={handleInputChange}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                  </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                {/* No of Persons */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    No of Persons
-                  </label>
-                  <input
-                    type="number"
-                    name="noOfPersons"
-                    min="1"
-                    value={formData.noOfPersons}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                    {/* No of Persons */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        No of Persons
+                      </label>
+                      <input
+                        type="number"
+                        name="noOfPersons"
+                        min="1"
+                        value={formData.noOfPersons}
+                        onChange={handleInputChange}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
 
-                {/* Mobile Number */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Mobile Number
-                  </label>
-                  <input
-                    type="tel"
-                    name="mobileNumber"
-                    value={formData.mobileNumber}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
+                    {/* Mobile Number */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Mobile Number
+                      </label>
+                      <input
+                        type="tel"
+                        name="mobileNumber"
+                        value={formData.mobileNumber}
+                        onChange={handleInputChange}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
 
-                {/* Rate */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Rate
-                  </label>
-                  <input
-                    type="number"
-                    name="rate"
-                    min="0"
-                    value={formData.rate}
-                    onChange={handleInputChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  />
-                </div>
-              </div>
+                    {/* Rate */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Rate
+                      </label>
+                      <input
+                        type="number"
+                        name="rate"
+                        min="0"
+                        value={formData.rate}
+                        onChange={handleInputChange}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                  </div>
 
-              {/* Including GST Toggle */}
-              <div className="mb-6">
-                <label className="flex items-center space-x-3">
-                  <input
-                    type="checkbox"
-                    name="includingGst"
-                    checked={formData.includingGst}
-                    onChange={handleInputChange}
-                    className="w-5 h-5 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                  />
-                  <span className="text-sm font-medium text-gray-700">Including GST</span>
-                </label>
-              </div>
+                  {/* Including GST Toggle */}
+                  <div className="mb-6">
+                    <label className="flex items-center space-x-3">
+                      <input
+                        type="checkbox"
+                        name="includingGst"
+                        checked={formData.includingGst}
+                        onChange={handleInputChange}
+                        className="w-5 h-5 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                      />
+                      <span className="text-sm font-medium text-gray-700">Including GST</span>
+                    </label>
+                  </div>
 
-              {/* Remarks */}
-              <div className="mb-6">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Remarks
-                </label>
-                <textarea
-                  name="remarks"
-                  value={formData.remarks}
-                  onChange={handleInputChange}
-                  rows={3}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Any special requests or notes"
-                />
-              </div>
+                  {/* Remarks */}
+                  <div className="mb-6">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Remarks
+                    </label>
+                    <textarea
+                      name="remarks"
+                      value={formData.remarks}
+                      onChange={handleInputChange}
+                      rows={3}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      placeholder="Any special requests or notes"
+                    />
+                  </div>
 
-              {/* Room Selection */}
-              <div className="mb-6">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Room Number <span className="text-red-500">*</span>
-                </label>
-                <select
-                  name="roomId"
-                  required
-                  value={formData.roomId}
-                  onChange={handleInputChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="">Select a vacant room</option>
-                  {availableRooms.map(room => (
-                    <option key={room.roomId} value={room.roomId}>
-                      Room {room.roomNo} - {room.roomTypeName || 'Standard'}
-                    </option>
-                  ))}
-                </select>
-                <p className="text-xs text-gray-500 mt-1">
-                  Note: For walk-in guests, room status will automatically update to "OD (Occupied Dirty)" upon check-in.
-                </p>
-              </div>
+                  {/* Room Selection */}
+                  <div className="mb-6">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Room Number <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      name="roomId"
+                      required
+                      value={formData.roomId}
+                      onChange={handleInputChange}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                      <option value="">Select a vacant room</option>
+                      {availableRooms.map(room => (
+                        <option key={room.roomId} value={room.roomId}>
+                          Room {room.roomNo} - {room.roomTypeName || 'Standard'}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Note: For walk-in guests, room status will automatically update to "OD (Occupied Dirty)" upon check-in.
+                    </p>
+                  </div>
+                </>
+              )}
 
               {/* Form Actions */}
               <div className="flex space-x-4">
@@ -715,6 +1059,19 @@ const CheckIn: React.FC = () => {
           </div>
         </div>
       </div>
+      <Modal
+        isOpen={modalOpen}
+        onClose={() => setModalOpen(false)}
+        title={modalTitle}
+        type={modalType}
+        onConfirm={modalAction || undefined}
+        confirmText={confirmText}
+        cancelText={cancelText}
+        showConfirmButton={showConfirmButton}
+        showCancelButton={showCancelButton}
+      >
+        {modalMessage}
+      </Modal>
     </Layout>
   );
 };
