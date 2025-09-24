@@ -357,6 +357,12 @@ export const advanceApi = {
   createAdvanceForInHouse: (advance: Omit<Advance, 'advanceId' | 'receiptNo'>): Promise<AxiosResponse<ApiResponse<Advance>>> =>
     apiClient.post('/advances/inhouse', advance),
   
+  createAdvanceForRoom: (roomNo: string, advance: Omit<Advance, 'advanceId' | 'receiptNo'>): Promise<AxiosResponse<ApiResponse<Advance>>> =>
+    apiClient.post(`/advances/room/${roomNo}`, advance),
+  
+  createAdvanceForBill: (billNo: string, advance: Omit<Advance, 'advanceId' | 'receiptNo'>): Promise<AxiosResponse<ApiResponse<Advance>>> =>
+    apiClient.post(`/advances/bill/${billNo}`, advance),
+  
   getAdvancesByReservation: (reservationNo: string): Promise<AxiosResponse<ApiResponse<Advance[]>>> =>
     apiClient.get(`/advances/reservation/${reservationNo}`),
   

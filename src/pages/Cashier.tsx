@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Advance, PaymentMode, Reservation, CheckIn, AccountHead, SettlementType, Transaction } from '../types/api';
-import { advanceApi, masterDataApi, reservationApi, checkInApi, transactionApi, billApi } from '../services/api';
+import { Advance, PaymentMode, Reservation, CheckIn, AccountHead, SettlementType, Transaction, Room } from '../types/api';
+import { advanceApi, masterDataApi, reservationApi, checkInApi, transactionApi, billApi, roomApi } from '../services/api';
 import Layout from '../components/Layout/Layout';
 import { BillPayment } from '../types/api';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
@@ -11,11 +11,14 @@ import Modal from '../components/Modal';
 
 const Cashier = () => {
   const [activeTab, setActiveTab] = useState<'record' | 'edit' | 'view' | 'reprint' | 'expenses' | 'settlement' | 'sales' | 'split'>('record');
+  const [recordSubTab, setRecordSubTab] = useState<'reservation' | 'bill' | 'room'>('reservation');
   const [loading, setLoading] = useState(false);
   const [paymentModes, setPaymentModes] = useState<PaymentMode[]>([]);
   const [accountHeads, setAccountHeads] = useState<AccountHead[]>([]);
   const [settlementTypes, setSettlementTypes] = useState<SettlementType[]>([]);
   const [contextOptions, setContextOptions] = useState<any[]>([]);
+  
+  // Form state for different record types
   const [formData, setFormData] = useState({
     receiptNumber: `AUTO-GEN-${Math.floor(Math.random() * 9000 + 1000)}`,
     contextValue: '',
@@ -28,6 +31,7 @@ const Cashier = () => {
     creditCardCompany: '',
     cardNumber: '',
     onlineCompanyName: '',
+    roomNo: '', // Added for room advances
   });
   
   // Reprint Bill state
@@ -63,9 +67,9 @@ const Cashier = () => {
     amount: 0,
     narration: '',
     modeOfPaymentId: '',
-    voucherNo: '', // Add voucherNo field
-    shiftNo: '1', // Add shiftNo field with default value
-    shiftDate: new Date().toISOString().split('T')[0], // Add shiftDate field
+    voucherNo: '',
+    shiftNo: '1',
+    shiftDate: new Date().toISOString().split('T')[0],
   });
   
   // Split Bill state
@@ -374,6 +378,11 @@ const Cashier = () => {
     if (name === 'contextValue') {
       autoFillGuestName(value);
     }
+    
+    // Auto-fill guest name when room number changes
+    if (name === 'roomNo') {
+      autoFillGuestNameForRoom(value);
+    }
   };
 
   const handleReprintInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
@@ -643,6 +652,42 @@ const Cashier = () => {
     setDebounceTimer(timer);
   };
 
+  // Function to auto-fill guest name for room advance based on room number
+  const autoFillGuestNameForRoom = async (roomNo: string) => {
+    if (!roomNo) {
+      setFormData(prev => ({ ...prev, guestName: '' }));
+      return;
+    }
+    
+    try {
+      // First, get the room ID by room number (for validation and guest lookup)
+      const roomsRes = await roomApi.getRooms();
+      if (roomsRes.data.success) {
+        const room = roomsRes.data.data.find((r: Room) => r.roomNo === roomNo);
+        if (room) {
+          // Now get the guest name by room ID
+          const checkInRes = await checkInApi.getCheckInByRoom(room.roomId);
+          if (checkInRes.data.success && checkInRes.data.data) {
+            setFormData(prev => ({ ...prev, guestName: checkInRes.data.data.guestName }));
+          } else {
+            setFormData(prev => ({ ...prev, guestName: '' }));
+          }
+        } else {
+          setFormData(prev => ({ ...prev, guestName: '' }));
+          // Only show notification if room number is provided but not found
+          if (roomNo.trim() !== '') {
+            showNotification(`Room ${roomNo} not found.`, false);
+          }
+        }
+      } else {
+        showNotification('Failed to fetch room information.', false);
+      }
+    } catch (error) {
+      showNotification('Failed to fetch guest name for room advance. Please try again.', false);
+      setFormData(prev => ({ ...prev, guestName: '' }));
+    }
+  };
+
   const handleEditInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value, type } = e.target;
     setEditForm(prev => ({
@@ -858,14 +903,22 @@ const Cashier = () => {
     e.preventDefault();
     setLoading(true);
     try {
-      // Validate required fields
-      if (!formData.contextValue || !formData.modeOfPaymentId || !formData.amount) {
-        showNotification('Please fill all required fields.', false);
-        setLoading(false);
-        return;
+      // Validate required fields based on sub-tab
+      if (recordSubTab === 'room') {
+        if (!formData.roomNo || !formData.modeOfPaymentId || !formData.amount) {
+          showNotification('Please fill all required fields.', false);
+          setLoading(false);
+          return;
+        }
+      } else {
+        if (!formData.contextValue || !formData.modeOfPaymentId || !formData.amount) {
+          showNotification('Please fill all required fields.', false);
+          setLoading(false);
+          return;
+        }
       }
       
-      // Determine context type by prefix (simple logic, can be improved)
+      // Determine context type by sub-tab
       let response;
       const advanceData = {
         guestName: formData.guestName,
@@ -878,22 +931,31 @@ const Cashier = () => {
         onlineCompanyName: formData.onlineCompanyName,
       };
       
-      if (/^F/i.test(formData.contextValue)) {
-        // Folio (inhouse)
-        response = await advanceApi.createAdvanceForInHouse({
-          ...advanceData,
-          folioNo: formData.contextValue,
-        });
-      } else if (/^B/i.test(formData.contextValue)) {
-        // Bill
-        showNotification('Bill advances not implemented in API.', false);
-        setLoading(false);
-        return;
-      } else {
-        // Reservation
+      if (recordSubTab === 'reservation') {
+        // Reservation - add R prefix if not present
+        const reservationNo = formData.contextValue.startsWith('R') 
+          ? formData.contextValue 
+          : `R${formData.contextValue}`;
+        
         response = await advanceApi.createAdvanceForReservation({
           ...advanceData,
-          reservationNo: formData.contextValue,
+          reservationNo,
+        });
+      } else if (recordSubTab === 'bill') {
+        // Bill - add B prefix if not present
+        const billNo = formData.contextValue.startsWith('B') 
+          ? formData.contextValue 
+          : `B${formData.contextValue}`;
+        
+        response = await advanceApi.createAdvanceForBill(billNo, advanceData);
+      } else if (recordSubTab === 'room') {
+        // Room
+        response = await advanceApi.createAdvanceForRoom(formData.roomNo, {
+          guestName: formData.guestName,
+          modeOfPaymentId: formData.modeOfPaymentId,
+          amount: formData.amount,
+          narration: formData.narration,
+          date: formData.date,
         });
       }
       
@@ -991,6 +1053,7 @@ const Cashier = () => {
       creditCardCompany: '',
       cardNumber: '',
       onlineCompanyName: '',
+      roomNo: '',
     });
     setAttemptedAutoFill(false);
     setContextError(null);
@@ -1007,12 +1070,20 @@ const Cashier = () => {
       setEditingAdvance(null);
       setAttemptedAutoFill(false);
       setContextError(null);
+      setRecordSubTab('reservation'); // Reset to reservation sub-tab
     } else if (tab === 'edit') {
       // Reset edit form when switching to edit tab
       setEditingAdvance(null);
       setAttemptedAutoFill(false);
       setContextError(null);
     }
+  };
+
+  // Handle sub-tab change for record tab
+  const handleRecordSubTabChange = (subTab: 'reservation' | 'bill' | 'room') => {
+    setRecordSubTab(subTab);
+    // Reset form when switching sub-tabs
+    handleClearForm();
   };
 
   // Handle reprint bill
@@ -1567,17 +1638,15 @@ const Cashier = () => {
       });
       
       if (paymentResponse.data.success) {
-        showNotification('Expenses recorded successfully!', true);
+        showNotification('Settlement recorded successfully!', true);
         
         // Reset form
-        setExpensesData({
+        setSettlementData({
           folioNo: '',
           guestName: '',
-          accHeadId: '',
+          settlementTypeId: '',
           amount: 0,
-          narration: '',
-          voucherNo: '',
-          includingGst: 'N',
+          remarks: '',
         });
       } else {
         throw new Error(paymentResponse.data.message || 'Failed to record settlement');
@@ -1750,7 +1819,6 @@ const Cashier = () => {
             >
               Sales Receipts
             </button>
-           
             <button
               type="button"
               onClick={() => handleTabChange('split')}
@@ -1765,8 +1833,6 @@ const Cashier = () => {
           </div>
         </div>
 
-
-
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Main Content */}
           <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-gray-200">
@@ -1774,7 +1840,45 @@ const Cashier = () => {
               <>
                 <div className="p-6 border-b border-gray-200">
                   <h2 className="text-xl font-semibold text-gray-900">Record New Advance</h2>
+                  
+                  {/* Sub-tabs for Record Advance */}
+                  <div className="flex rounded-lg overflow-hidden border border-gray-200 mt-4">
+                    <button
+                      type="button"
+                      onClick={() => handleRecordSubTabChange('reservation')}
+                      className={`px-4 py-2 text-sm font-medium transition-colors focus:outline-none ${
+                        recordSubTab === 'reservation'
+                          ? 'bg-indigo-600 text-white'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                    >
+                      By Reservation
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleRecordSubTabChange('bill')}
+                      className={`px-4 py-2 text-sm font-medium transition-colors focus:outline-none ${
+                        recordSubTab === 'bill'
+                          ? 'bg-indigo-600 text-white'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                    >
+                      By Bill
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleRecordSubTabChange('room')}
+                      className={`px-4 py-2 text-sm font-medium transition-colors focus:outline-none ${
+                        recordSubTab === 'room'
+                          ? 'bg-indigo-600 text-white'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                    >
+                      By Room
+                    </button>
+                  </div>
                 </div>
+                
                 <form onSubmit={handleSubmit} className="p-6 space-y-6">
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     {/* Receipt Number */}
@@ -1790,22 +1894,45 @@ const Cashier = () => {
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-500"
                       />
                     </div>
-                    {/* Context Dropdown (single field) */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Folio / Bill / Reservation *
-                      </label>
-                      <input
-                        type="text"
-                        name="contextValue"
-                        value={formData.contextValue}
-                        onChange={handleInputChange}
-                        placeholder="e.g., R12345, F67890, or B54321"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                        required
-                      />
-                      <p className="mt-1 text-xs text-gray-500">Prefix: R (Reservation), F (Folio), B (Bill)</p>
-                    </div>
+                    
+                    {/* Context Dropdown (for reservation and bill) or Room Number (for room) */}
+                    {recordSubTab !== 'room' ? (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          {recordSubTab === 'reservation' ? 'Reservation Number *' : 'Bill Number *'}
+                        </label>
+                        <input
+                          type="text"
+                          name="contextValue"
+                          value={formData.contextValue}
+                          onChange={handleInputChange}
+                          placeholder={recordSubTab === 'reservation' ? "e.g., 1-25-26" : "e.g., B12345"}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                          required
+                        />
+                        <p className="mt-1 text-xs text-gray-500">
+                          {recordSubTab === 'reservation' 
+                            ? "Enter reservation number (will be prefixed with 'R')" 
+                            : "Enter bill number (will be prefixed with 'B')"}
+                        </p>
+                      </div>
+                    ) : (
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Room Number *
+                        </label>
+                        <input
+                          type="text"
+                          name="roomNo"
+                          value={formData.roomNo}
+                          onChange={handleInputChange}
+                          placeholder="e.g., 101"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                          required
+                        />
+                      </div>
+                    )}
+                    
                     {/* Date */}
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -1821,6 +1948,7 @@ const Cashier = () => {
                       />
                     </div>
                   </div>
+                  
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {/* Guest Name */}
                     <div>
@@ -1834,6 +1962,7 @@ const Cashier = () => {
                           value={formData.guestName}
                           onChange={handleInputChange}
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                          readOnly={recordSubTab === 'room'} // Read-only for room advances
                         />
                         {autoFillLoading && (
                           <div className="absolute inset-y-0 right-0 flex items-center pr-3">
@@ -1848,6 +1977,7 @@ const Cashier = () => {
                       )}
                     </div>
                   </div>
+                  
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {/* Mode of Payment */}
                     <div>
@@ -1899,6 +2029,7 @@ const Cashier = () => {
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     />
                   </div>
+                  
                   {/* Narration */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -1911,6 +2042,7 @@ const Cashier = () => {
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     />
                   </div>
+                  
                   <div className="flex justify-end">
                     <button
                       type="submit"
