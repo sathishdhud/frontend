@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useLocation } from 'react-router-dom';
 import Layout from '../components/Layout/Layout';
 import { Advance, CheckIn, PaymentMode, Room, Reservation } from '../types/api';
 import { advanceApi, masterDataApi, checkInApi, transactionApi, billApi, roomApi, reservationApi } from '../services/api';
@@ -13,6 +14,7 @@ interface PaymentFormData {
 }
 
 const BillGeneration: React.FC = () => {
+  const location = useLocation();
   // Tab state
   const [activeTab, setActiveTab] = useState<'reservation' | 'folio'>('reservation');
   
@@ -55,7 +57,25 @@ const BillGeneration: React.FC = () => {
   useEffect(() => {
     fetchPaymentModes();
     fetchRooms();
-  }, []);
+    
+    // Check for folioNo in URL query parameters
+    const queryParams = new URLSearchParams(location.search);
+    const folioNo = queryParams.get('folioNo');
+    
+    if (folioNo) {
+      // Set form data and active tab
+      setFormData(prev => ({
+        ...prev,
+        folioNo: folioNo
+      }));
+      setActiveTab('folio');
+      
+      // Automatically generate bill for this folio
+      setTimeout(() => {
+        generateBillByFolio(folioNo);
+      }, 100);
+    }
+  }, [location.search]);
 
   const fetchPaymentModes = async () => {
     try {
@@ -107,7 +127,7 @@ const BillGeneration: React.FC = () => {
       const allReservationsRes = await reservationApi.getReservations();
       console.log('All reservations result:', allReservationsRes.data);
       
-      if (allReservationsRes.data.success && allReservationsRes.data.length > 0) {
+      if (allReservationsRes.data.success && allReservationsRes.data.data.length > 0) {
         const exactMatch = allReservationsRes.data.data.find((r: Reservation) => r.reservationNo === reservationNo);
         if (exactMatch) {
           console.log('Found exact match in all reservations:', exactMatch);

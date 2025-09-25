@@ -786,14 +786,14 @@ const Reservations: React.FC = () => {
     required: boolean = false
   ) => (
     <div>
-      <label className="block text-sm font-medium text-gray-700 mb-2">
+      <label className="block text-xs font-medium text-gray-700 mb-1">
         {label} {required && "*"}
       </label>
       <select
         name={name}
         value={formData[name as keyof typeof formData] || ""}
         onChange={handleInputChange}
-        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+        className="w-full px-2 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-xs"
         disabled={masterDataLoading}
       >
         <option value="">{masterDataLoading ? "Loading..." : `Select ${label}`}</option>
@@ -836,7 +836,7 @@ const Reservations: React.FC = () => {
             <button
               key={number}
               onClick={() => setCurrentPage(number)}
-              className={`px-3 py-1 text-sm rounded ${
+              className={`px-3 py-1 text-xs rounded ${
                 currentPage === number
                   ? 'bg-blue-600 text-white'
                   : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -924,19 +924,51 @@ const Reservations: React.FC = () => {
     );
   };
 
+  // Custom Date Input Component with Calendar Icon
+  const DateInput = ({ name, value, onChange, onKeyDown, label, required }: { 
+    name: string; 
+    value: string; 
+    onChange: (e: React.ChangeEvent<HTMLInputElement>) => void; 
+    onKeyDown?: (e: React.KeyboardEvent) => void; 
+    label: string; 
+    required?: boolean; 
+  }) => (
+    <div>
+      <label className="block text-xs font-medium text-gray-700 mb-1">
+        {label} {required && "*"}
+      </label>
+      <div className="relative">
+        <input
+          type="date"
+          name={name}
+          required={required}
+          value={value}
+          onChange={onChange}
+          onKeyDown={onKeyDown}
+          className="w-full px-2 py-1.5 pr-8 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-xs"
+        />
+        <div className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
+          <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+          </svg>
+        </div>
+      </div>
+    </div>
+  );
+
   return (
     <Layout>
       <div className="space-y-6">
         <div className="flex items-center justify-between">
-          <h1 className="text-3xl font-bold text-gray-900">
+          <h1 className="text-2xl font-bold text-gray-900">
             Reservation Management
           </h1>
           <div className="flex space-x-2">
             <button
               onClick={() => setIsCreating(true)}
-              className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+              className={`px-4 py-2 rounded-lg font-medium text-sm transition-colors ${
                 isCreating
-                  ? "bg-blue-600 text-white"
+                  ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md"
                   : "bg-gray-100 text-gray-700 hover:bg-gray-200"
               }`}
             >
@@ -947,9 +979,9 @@ const Reservations: React.FC = () => {
                 setIsCreating(false);
                 setActiveTab("reservation");
               }}
-              className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+              className={`px-4 py-2 rounded-lg font-medium text-sm transition-colors ${
                 !isCreating && activeTab === "reservation"
-                  ? "bg-blue-600 text-white"
+                  ? "bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md"
                   : "bg-gray-100 text-gray-700 hover:bg-gray-200"
               }`}
             >
@@ -959,12 +991,15 @@ const Reservations: React.FC = () => {
         </div>
 
         {isCreating ? (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-            <div className="p-6 border-b border-gray-200">
-              <h2 className="text-xl font-semibold text-gray-900">
+          <div className="max-w-4xl mx-auto bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
+            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-4 border-b border-gray-200">
+              <h2 className="text-lg font-semibold text-gray-900 flex items-center">
+                <svg className="w-5 h-5 mr-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"></path>
+                </svg>
                 {editingReservation ? "Edit Reservation" : "Create Reservation"}
               </h2>
-              <p className="text-gray-600 mt-1">
+              <p className="text-gray-600 text-xs mt-1 ml-7">
                 {editingReservation 
                   ? "Edit the details below to update the reservation." 
                   : "Fill in the details below to create a new reservation."}
@@ -972,38 +1007,48 @@ const Reservations: React.FC = () => {
             </div>
 
             {/* Tabs */}
-            <div className="flex border-b border-gray-200">
+            <div className="flex border-b border-gray-200 bg-gray-50">
               <button
                 type="button"
                 onClick={() => setActiveTab("reservation")}
-                className={`px-6 py-3 text-sm font-medium ${
+                className={`px-4 py-3 text-xs font-medium flex-1 text-center transition-colors ${
                   activeTab === "reservation"
-                    ? "border-b-2 border-blue-600 text-blue-600"
-                    : "text-gray-600 hover:text-gray-800"
+                    ? "border-b-2 border-blue-600 text-blue-600 bg-white"
+                    : "text-gray-600 hover:text-gray-800 hover:bg-gray-100"
                 }`}
               >
-                Reservation Details
+                <div className="flex items-center justify-center">
+                  <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9v-9m0-9v9"></path>
+                  </svg>
+                  Reservation Details
+                </div>
               </button>
               <button
                 type="button"
                 onClick={() => setActiveTab("additional")}
-                className={`px-6 py-3 text-sm font-medium ${
+                className={`px-4 py-3 text-xs font-medium flex-1 text-center transition-colors ${
                   activeTab === "additional"
-                    ? "border-b-2 border-blue-600 text-blue-600"
-                    : "text-gray-600 hover:text-gray-800"
+                    ? "border-b-2 border-blue-600 text-blue-600 bg-white"
+                    : "text-gray-600 hover:text-gray-800 hover:bg-gray-100"
                 }`}
               >
-                Additional Details
+                <div className="flex items-center justify-center">
+                  <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path>
+                  </svg>
+                  Additional Details
+                </div>
               </button>
             </div>
 
             {/* Form */}
-            <form onSubmit={handleSubmit} className="p-6">
+            <form onSubmit={handleSubmit} className="p-4">
               {activeTab === "reservation" && (
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                   {/* Guest Name */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
                       Guest Name *
                     </label>
                     <input
@@ -1013,46 +1058,34 @@ const Reservations: React.FC = () => {
                       value={formData.guestName}
                       onChange={handleInputChange}
                       onKeyDown={(e) => handleKeyDown(e, "arrivalDate")}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-2 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-xs"
                       placeholder="Enter guest's full name"
                     />
                   </div>
 
                   {/* Arrival Date */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Arrival Date *
-                    </label>
-                    <input
-                      type="date"
-                      name="arrivalDate"
-                      required
-                      value={formData.arrivalDate}
-                      onChange={handleInputChange}
-                      onKeyDown={(e) => handleKeyDown(e, "departureDate")}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
+                  <DateInput 
+                    name="arrivalDate"
+                    value={formData.arrivalDate}
+                    onChange={handleInputChange}
+                    onKeyDown={(e) => handleKeyDown(e, "departureDate")}
+                    label="Arrival Date *"
+                    required
+                  />
 
                   {/* Departure Date */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Departure Date *
-                    </label>
-                    <input
-                      type="date"
-                      name="departureDate"
-                      required
-                      value={formData.departureDate}
-                      onChange={handleInputChange}
-                      onKeyDown={(e) => handleKeyDown(e, "noOfPersons")}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
+                  <DateInput 
+                    name="departureDate"
+                    value={formData.departureDate}
+                    onChange={handleInputChange}
+                    onKeyDown={(e) => handleKeyDown(e, "noOfPersons")}
+                    label="Departure Date *"
+                    required
+                  />
 
                   {/* Number of Days - Auto Calculated */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
                       Number of Days
                     </label>
                     <input
@@ -1061,15 +1094,15 @@ const Reservations: React.FC = () => {
                       min="1"
                       value={formData.noOfDays}
                       readOnly
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100 text-gray-500"
+                      className="w-full px-2 py-1.5 border border-gray-300 rounded-lg bg-gray-100 text-gray-500 text-xs"
                     />
-                    <p className="text-xs text-gray-500 mt-1">Auto-calculated based on arrival and departure dates</p>
+                    <p className="text-xs text-gray-500 mt-1">Auto-calculated</p>
                   </div>
 
                   {/* Number of Persons */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Number of Persons *
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                      Persons *
                     </label>
                     <input
                       type="number"
@@ -1079,14 +1112,14 @@ const Reservations: React.FC = () => {
                       value={formData.noOfPersons}
                       onChange={handleInputChange}
                       onKeyDown={(e) => handleKeyDown(e, "noOfRooms")}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-2 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-xs"
                     />
                   </div>
 
                   {/* Number of Rooms */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Number of Rooms *
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                      Rooms *
                     </label>
                     <input
                       type="number"
@@ -1096,14 +1129,14 @@ const Reservations: React.FC = () => {
                       value={formData.noOfRooms}
                       onChange={handleInputChange}
                       onKeyDown={(e) => handleKeyDown(e, "mobileNumber")}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                      className="w-full px-2 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-xs"
                     />
                   </div>
 
                   {/* Mobile Number */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Mobile Number *
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                      Mobile *
                     </label>
                     <input
                       type="tel"
@@ -1112,15 +1145,15 @@ const Reservations: React.FC = () => {
                       value={formData.mobileNumber}
                       onChange={handleInputChange}
                       onKeyDown={(e) => handleKeyDown(e, "emailId")}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                      placeholder="e.g., +1234567890"
+                      className="w-full px-2 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-xs"
+                      placeholder="+1234567890"
                     />
                   </div>
 
                   {/* Email ID */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Email ID
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                      Email
                     </label>
                     <input
                       type="email"
@@ -1128,15 +1161,15 @@ const Reservations: React.FC = () => {
                       value={formData.emailId}
                       onChange={handleInputChange}
                       onKeyDown={(e) => handleKeyDown(e, "rate")}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                      placeholder="e.g., guest@example.com"
+                      className="w-full px-2 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-xs"
+                      placeholder="guest@example.com"
                     />
                   </div>
 
                   {/* Rate per night */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Rate (per night)
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                      Rate (₹/night)
                     </label>
                     <input
                       type="number"
@@ -1146,80 +1179,48 @@ const Reservations: React.FC = () => {
                       value={formData.rate}
                       onChange={handleInputChange}
                       onKeyDown={(e) => handleKeyDown(e, "includingGst")}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                      placeholder="e.g., 150.00"
+                      className="w-full px-2 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-xs"
+                      placeholder="150.00"
                     />
                   </div>
 
-                  {/* GST and Action Buttons in the same row */}
-                  <div className="lg:col-span-3">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                      {/* GST */}
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          GST Included
-                        </label>
-                        <select
-                          name="includingGst"
-                          value={formData.includingGst}
-                          onChange={handleInputChange}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                              e.preventDefault();
-                              const saveButton = document.querySelector('[type="submit"]') as HTMLElement;
-                              if (saveButton) {
-                                saveButton.focus();
-                              }
-                            }
-                          }}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                        >
-                          <option value="N">No</option>
-                          <option value="Y">Yes</option>
-                        </select>
-                      </div>
-                      
-                      {/* Action Buttons - aligned with GST field */}
-                      <div className="md:col-span-2 flex items-end justify-end space-x-4">
-                        <button
-                          type="button"
-                          onClick={handleClear}
-                          className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
-                        >
-                          {editingReservation ? "Cancel" : "Clear"}
-                        </button>
-                        <button
-                          type="submit"
-                          disabled={loading}
-                          className="px-6 py-2 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-lg hover:from-blue-700 hover:to-purple-700 disabled:opacity-50"
-                        >
-                          {loading ? (editingReservation ? "Updating..." : "Saving...") : (editingReservation ? "Update Reservation" : "Save Reservation")}
-                        </button>
-                      </div>
-                    </div>
+                  {/* GST */}
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                      GST Included
+                    </label>
+                    <select
+                      name="includingGst"
+                      value={formData.includingGst}
+                      onChange={handleInputChange}
+                      className="w-full px-2 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-xs"
+                    >
+                      <option value="N">No</option>
+                      <option value="Y">Yes</option>
+                    </select>
                   </div>
                 </div>
               )}
 
               {activeTab === "additional" && (
-                <div className="space-y-6">
+                <div className="space-y-3">
                   {/* Error message and retry button */}
                   {masterDataError && (
-                    <div className="bg-red-50 border-l-4 border-red-500 p-4 mb-4">
+                    <div className="bg-red-50 border-l-4 border-red-500 p-3 mb-3 rounded">
                       <div className="flex">
                         <div className="flex-shrink-0">
-                          <svg className="h-5 w-5 text-red-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                          <svg className="h-4 w-4 text-red-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
                             <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
                           </svg>
                         </div>
                         <div className="ml-3">
-                          <p className="text-sm text-red-700">
+                          <p className="text-xs text-red-700">
                             {masterDataError}
                           </p>
                           {debugInfo && (
-                            <details className="mt-2 text-sm text-red-600">
+                            <details className="mt-1 text-xs text-red-600">
                               <summary className="cursor-pointer">Debug Information</summary>
-                              <pre className="mt-2 p-2 bg-red-100 rounded text-xs overflow-auto">
+                              <pre className="mt-1 p-1 bg-red-100 rounded text-xs overflow-auto">
                                 {JSON.stringify(debugInfo, null, 2)}
                               </pre>
                             </details>
@@ -1229,7 +1230,7 @@ const Reservations: React.FC = () => {
                           <div className="-mx-1.5 -my-1.5">
                             <button
                               onClick={fetchMasterData}
-                              className="inline-flex bg-red-100 px-3 py-1.5 text-sm font-medium text-red-800 hover:bg-red-200 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+                              className="inline-flex bg-red-100 px-2 py-1 text-xs font-medium text-red-800 hover:bg-red-200 rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
                             >
                               Retry
                             </button>
@@ -1241,13 +1242,13 @@ const Reservations: React.FC = () => {
 
                   {/* Loading indicator */}
                   {masterDataLoading && (
-                    <div className="flex justify-center items-center py-4">
-                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-                      <span className="ml-3 text-gray-600">Loading master data...</span>
+                    <div className="flex justify-center items-center py-3">
+                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
+                      <span className="ml-2 text-gray-600 text-xs">Loading master data...</span>
                     </div>
                   )}
 
-                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                     {/* Company Dropdown */}
                     {renderDropdown("companyId", "Company", companies, "companyId", "companyName")}
 
@@ -1259,7 +1260,7 @@ const Reservations: React.FC = () => {
 
                     {/* Arrival Details */}
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
                         Arrival Details
                       </label>
                       <input
@@ -1267,8 +1268,8 @@ const Reservations: React.FC = () => {
                         name="arrivalDetails"
                         value={formData.arrivalDetails}
                         onChange={handleInputChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                        placeholder="Flight number, train details, etc."
+                        className="w-full px-2 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-xs"
+                        placeholder="Flight/train details"
                       />
                     </div>
 
@@ -1289,22 +1290,22 @@ const Reservations: React.FC = () => {
 
                     {/* Remarks */}
                     <div className="lg:col-span-3">
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
                         Remarks
                       </label>
                       <textarea
                         name="remarks"
                         value={formData.remarks}
                         onChange={handleInputChange}
-                        rows={3}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                        placeholder="Any special requests or notes (Optional)"
+                        rows={2}
+                        className="w-full px-2 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-xs"
+                        placeholder="Special requests or notes"
                       />
                     </div>
 
                     {/* ID Proof 1 */}
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
                         ID Proof 1
                       </label>
                       <input
@@ -1313,14 +1314,14 @@ const Reservations: React.FC = () => {
                         value={formData.idProof1}
                         onChange={handleInputChange}
                         onKeyDown={(e) => handleKeyDown(e, "idProof2")}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                        placeholder="e.g., Passport: P12345678"
+                        className="w-full px-2 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-xs"
+                        placeholder="Passport: P12345678"
                       />
                     </div>
 
                     {/* ID Proof 2 */}
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
                         ID Proof 2
                       </label>
                       <input
@@ -1329,14 +1330,14 @@ const Reservations: React.FC = () => {
                         value={formData.idProof2}
                         onChange={handleInputChange}
                         onKeyDown={(e) => handleKeyDown(e, "idProof3")}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                        placeholder="e.g., Driver License: DL987654321"
+                        className="w-full px-2 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-xs"
+                        placeholder="License: DL987654321"
                       />
                     </div>
 
                     {/* ID Proof 3 */}
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
                         ID Proof 3
                       </label>
                       <input
@@ -1344,38 +1345,64 @@ const Reservations: React.FC = () => {
                         name="idProof3"
                         value={formData.idProof3}
                         onChange={handleInputChange}
-                        onKeyDown={(e) => {
-                          if (e.key === 'Enter') {
-                            e.preventDefault();
-                            const saveButton = document.querySelector('[type="submit"]') as HTMLElement;
-                            if (saveButton) {
-                              saveButton.focus();
-                            }
-                          }
-                        }}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                        placeholder="e.g., Aadhar Card: 1234-5678-9012"
+                        className="w-full px-2 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-xs"
+                        placeholder="Aadhar: 1234-5678-9012"
                       />
                     </div>
                   </div>
                 </div>
               )}
 
+              {/* Action Buttons - Fixed at the bottom */}
+              <div className="mt-6 pt-4 border-t border-gray-200 flex justify-between items-center">
+                <button
+                  type="button"
+                  onClick={handleClear}
+                  className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 text-xs font-medium flex items-center"
+                >
+                  <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                  </svg>
+                  {editingReservation ? "Cancel" : "Clear"}
+                </button>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="px-6 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg hover:from-blue-700 hover:to-indigo-700 disabled:opacity-50 text-xs font-medium flex items-center shadow-md"
+                >
+                  {loading ? (
+                    <>
+                      <svg className="animate-spin -ml-1 mr-2 h-3 w-3 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      {editingReservation ? "Updating..." : "Saving..."}
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
+                      </svg>
+                      {editingReservation ? "Update Reservation" : "Save Reservation"}
+                    </>
+                  )}
+                </button>
+              </div>
             </form>
           </div>
         ) : (
           <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-            <div className="p-6 border-b border-gray-200">
-              <h2 className="text-xl font-semibold text-gray-900 mb-4">
+            <div className="p-4 border-b border-gray-200">
+              <h2 className="text-lg font-semibold text-gray-900 mb-3">
                 Manage Reservations
               </h2>
               
               {/* Tabs */}
-              <div className="flex border-b border-gray-200 mb-4">
+              <div className="flex border-b border-gray-200 mb-3">
                 <button
                   type="button"
                   onClick={() => setActiveTab("reservation")}
-                  className={`px-6 py-3 text-sm font-medium ${
+                  className={`px-4 py-2 text-sm font-medium ${
                     activeTab === "reservation"
                       ? "border-b-2 border-blue-600 text-blue-600"
                       : "text-gray-600 hover:text-gray-800"
@@ -1386,7 +1413,7 @@ const Reservations: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setActiveTab("deleted")}
-                  className={`px-6 py-3 text-sm font-medium ${
+                  className={`px-4 py-2 text-sm font-medium ${
                     activeTab === "deleted"
                       ? "border-b-2 border-blue-600 text-blue-600"
                       : "text-gray-600 hover:text-gray-800"
@@ -1397,7 +1424,7 @@ const Reservations: React.FC = () => {
               </div>
 
               {/* Filter options */}
-              <div className="flex flex-wrap items-center gap-4 mb-4">
+              <div className="flex flex-wrap items-center gap-3 mb-3">
                 <div className="flex items-center space-x-2">
                   <label className="text-sm font-medium text-gray-700">Filter:</label>
                   <select
@@ -1441,37 +1468,37 @@ const Reservations: React.FC = () => {
                 <table className="min-w-full divide-y divide-gray-200">
                   <thead className="bg-gray-50">
                     <tr>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         No
                       </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Reservation No
                       </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Guest Name
                       </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Company
                       </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Plan
                       </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Arrival
                       </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden md:table-cell">
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden md:table-cell">
                         Departure
                       </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         P/R
                       </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden md:table-cell">
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden md:table-cell">
                         Rate (₹)
                       </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Checked
                       </th>
-                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                         Actions
                       </th>
                     </tr>
@@ -1479,13 +1506,13 @@ const Reservations: React.FC = () => {
                   <tbody className="bg-white divide-y divide-gray-200">
                     {currentReservations.map((reservation, index) => (
                       <tr key={reservation.reservationNo}>
-                        <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
+                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                           {indexOfFirstItem + index + 1}
                         </td>
-                        <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
+                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                           {reservation.reservationNo}
                         </td>
-                        <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
+                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                           {reservation.guestName ? (
                             <div
                               className="inline-block relative"
@@ -1522,7 +1549,7 @@ const Reservations: React.FC = () => {
                             "-"
                           )}
                         </td>
-                        <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
+                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                           {reservation.companyId ? (
                             <div
                               className="inline-block relative"
@@ -1565,25 +1592,25 @@ const Reservations: React.FC = () => {
                             "-"
                           )}
                         </td>
-                        <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
+                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                           {reservation.planName || reservation.planId || "-"}
                         </td>
-                        <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
+                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                           {reservation.arrivalDate}
                         </td>
-                        <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900 hidden md:table-cell">
+                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 hidden md:table-cell">
                           {reservation.departureDate}
                         </td>
-                        <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
+                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                           {reservation.noOfPersons}/{reservation.noOfRooms}
                         </td>
-                        <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900 hidden md:table-cell">
+                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 hidden md:table-cell">
                           {reservation.rate.toFixed(2)}
                         </td>
-                        <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
+                        <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                           {reservation.roomsCheckedIn || 0}/{reservation.noOfRooms}
                         </td>
-                        <td className="px-4 py-4 whitespace-nowrap text-sm font-medium">
+                        <td className="px-4 py-3 whitespace-nowrap text-sm font-medium">
                           <button
                             onClick={() => handleEdit(reservation)}
                             className="text-indigo-600 hover:text-indigo-900 mr-2"
@@ -1624,37 +1651,37 @@ const Reservations: React.FC = () => {
                       <table className="min-w-full divide-y divide-gray-200">
                         <thead className="bg-gray-50">
                           <tr>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                               No
                             </th>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                               Reservation No
                             </th>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                               Guest Name
                             </th>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                               Company
                             </th>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                               Plan
                             </th>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                               Arrival
                             </th>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden md:table-cell">
+                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden md:table-cell">
                               Departure
                             </th>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                               P/R
                             </th>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden md:table-cell">
+                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider hidden md:table-cell">
                               Rate (₹)
                             </th>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                               Deleted At
                             </th>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                            <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                               Actions
                             </th>
                           </tr>
@@ -1662,13 +1689,13 @@ const Reservations: React.FC = () => {
                         <tbody className="bg-white divide-y divide-gray-200">
                           {currentDeletedReservations.map((reservation: Reservation, index: number) => (
                             <tr key={reservation.reservationNo}>
-                              <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
+                              <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                                 {indexOfFirstItem + index + 1}
                               </td>
-                              <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
+                              <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                                 {reservation.reservationNo}
                               </td>
-                              <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
+                              <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                                 {reservation.guestName ? (
                                   <div
                                     className="inline-block relative"
@@ -1705,7 +1732,7 @@ const Reservations: React.FC = () => {
                                   "-"
                                 )}
                               </td>
-                              <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
+                              <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                                 {reservation.companyId ? (
                                   <div
                                     className="inline-block relative"
@@ -1748,25 +1775,25 @@ const Reservations: React.FC = () => {
                                   "-"
                                 )}
                               </td>
-                              <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
+                              <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                                 {reservation.planName || reservation.planId || "-"}
                               </td>
-                              <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
+                              <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                                 {reservation.arrivalDate}
                               </td>
-                              <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900 hidden md:table-cell">
+                              <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 hidden md:table-cell">
                                 {reservation.departureDate}
                               </td>
-                              <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
+                              <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                                 {reservation.noOfPersons}/{reservation.noOfRooms}
                               </td>
-                              <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900 hidden md:table-cell">
+                              <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 hidden md:table-cell">
                                 {reservation.rate.toFixed(2)}
                               </td>
-                              <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-900">
+                              <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                                 {(reservation as any).deletedAt ? new Date((reservation as any).deletedAt).toLocaleString() : "-"}
                               </td>
-                              <td className="px-4 py-4 whitespace-nowrap text-sm font-medium">
+                              <td className="px-4 py-3 whitespace-nowrap text-sm font-medium">
                                 <button
                                   onClick={() => handleRestore(reservation.reservationNo)}
                                   className="text-green-600 hover:text-green-900 mr-2"

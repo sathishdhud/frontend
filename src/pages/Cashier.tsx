@@ -34,6 +34,18 @@ const Cashier = () => {
     roomNo: '', // Added for room advances
   });
   
+  // State for room advance information
+  const [roomAdvanceInfo, setRoomAdvanceInfo] = useState({
+    folioNo: '',
+    guestName: ''
+  });
+  
+  // State for bill information
+  const [billInfo, setBillInfo] = useState({
+    folioNo: '',
+    guestName: ''
+  });
+  
   // Reprint Bill state
   const [reprintData, setReprintData] = useState({
     billNo: '',
@@ -489,6 +501,7 @@ const Cashier = () => {
                 const guestName = response.data.data[0].guestName;
                 if (guestName) {
                   setFormData(prev => ({ ...prev, guestName }));
+                  setBillInfo({ folioNo: '', guestName: '' }); // Clear bill info
                 } else {
                   // If no guest name in advances, fall back to check-in API
                   try {
@@ -497,17 +510,21 @@ const Cashier = () => {
                       const checkIn = checkInsRes.data.data.find((c: CheckIn) => c.folioNo === contextValue);
                       if (checkIn) {
                         setFormData(prev => ({ ...prev, guestName: checkIn.guestName }));
+                        setBillInfo({ folioNo: '', guestName: '' }); // Clear bill info
                       } else {
                         setFormData(prev => ({ ...prev, guestName: '' }));
+                        setBillInfo({ folioNo: '', guestName: '' }); // Clear bill info
                         setContextError('Folio not found');
                       }
                     } else {
                       setFormData(prev => ({ ...prev, guestName: '' }));
+                      setBillInfo({ folioNo: '', guestName: '' }); // Clear bill info
                       setContextError('Folio not found');
                     }
                   } catch (checkInError) {
                     showNotification('Failed to fetch guest name from check-in API. Please try again.', false);
                     setFormData(prev => ({ ...prev, guestName: '' }));
+                    setBillInfo({ folioNo: '', guestName: '' }); // Clear bill info
                     setContextError('Failed to fetch guest information for folio');
                   }
                 }
@@ -519,23 +536,28 @@ const Cashier = () => {
                     const checkIn = checkInsRes.data.data.find((c: CheckIn) => c.folioNo === contextValue);
                     if (checkIn) {
                       setFormData(prev => ({ ...prev, guestName: checkIn.guestName }));
+                      setBillInfo({ folioNo: '', guestName: '' }); // Clear bill info
                     } else {
                       setFormData(prev => ({ ...prev, guestName: '' }));
+                      setBillInfo({ folioNo: '', guestName: '' }); // Clear bill info
                       setContextError('Folio not found');
                     }
                   } else {
                     setFormData(prev => ({ ...prev, guestName: '' }));
+                    setBillInfo({ folioNo: '', guestName: '' }); // Clear bill info
                     setContextError('Folio not found');
                   }
                 } catch (checkInError) {
                   showNotification('Failed to fetch guest name from check-in API. Please try again.', false);
                   setFormData(prev => ({ ...prev, guestName: '' }));
+                  setBillInfo({ folioNo: '', guestName: '' }); // Clear bill info
                   setContextError('Failed to fetch guest information for folio');
                 }
               }
             } catch (folioError) {
               showNotification('Failed to fetch advances for folio. Please try again.', false);
               setFormData(prev => ({ ...prev, guestName: '' }));
+              setBillInfo({ folioNo: '', guestName: '' }); // Clear bill info
               setContextError('Failed to fetch guest name for folio');
             }
           } else if (/^R/i.test(contextValue)) {
@@ -543,48 +565,51 @@ const Cashier = () => {
             try {
               // Remove 'R' prefix if present to match the database format
               const reservationNo = contextValue.trim().replace(/^R/i, '');
+              
+              // First try to get guest name from reservation API
+              try {
+                const reservationResponse = await reservationApi.searchReservations(reservationNo);
+                if (reservationResponse.data.success && reservationResponse.data.data.length > 0) {
+                  // Find the exact match for the reservation number
+                  const reservation = reservationResponse.data.data.find((r: any) => 
+                    r.reservationNo === reservationNo
+                  );
+                  if (reservation) {
+                    setFormData(prev => ({ ...prev, guestName: reservation.guestName }));
+                    setBillInfo({ folioNo: '', guestName: '' }); // Clear bill info
+                    return; // Successfully found reservation
+                  }
+                }
+              } catch (reservationError) {
+                // Continue to advances API if reservation API fails
+              }
+              
+              // If reservation API fails, try to get guest name from advances API
               const response = await advanceApi.getAdvancesByReservation(reservationNo);
               if (response.data.success && response.data.data.length > 0) {
                 // Get guest name from the first advance record
                 const guestName = response.data.data[0].guestName;
                 if (guestName) {
                   setFormData(prev => ({ ...prev, guestName }));
+                  setBillInfo({ folioNo: '', guestName: '' }); // Clear bill info
                 } else {
                   setFormData(prev => ({ ...prev, guestName: '' }));
+                  setBillInfo({ folioNo: '', guestName: '' }); // Clear bill info
                   setContextError('Guest name not found for this reservation');
                 }
               } else {
-                // If no advances found, try to get guest name from reservation API
-                try {
-                  const reservationResponse = await reservationApi.searchReservations(reservationNo);
-                  if (reservationResponse.data.success && reservationResponse.data.data.length > 0) {
-                    // Find the exact match for the reservation number
-                    const reservation = reservationResponse.data.data.find((r: any) => 
-                      r.reservationNo === reservationNo
-                    );
-                    if (reservation) {
-                      setFormData(prev => ({ ...prev, guestName: reservation.guestName }));
-                    } else {
-                      setFormData(prev => ({ ...prev, guestName: '' }));
-                      setContextError('Reservation not found');
-                    }
-                  } else {
-                    setFormData(prev => ({ ...prev, guestName: '' }));
-                    setContextError('Reservation not found');
-                  }
-                } catch (reservationError) {
-                  showNotification('Failed to fetch guest name from reservation API. Please try again.', false);
-                  setFormData(prev => ({ ...prev, guestName: '' }));
-                  setContextError('Failed to fetch guest information for reservation');
-                }
+                setFormData(prev => ({ ...prev, guestName: '' }));
+                setBillInfo({ folioNo: '', guestName: '' }); // Clear bill info
+                setContextError('Reservation not found');
               }
             } catch (guestError) {
               showNotification('Failed to fetch guest name for reservation. Please try again.', false);
               setFormData(prev => ({ ...prev, guestName: '' }));
+              setBillInfo({ folioNo: '', guestName: '' }); // Clear bill info
               setContextError('Failed to fetch guest name for reservation');
             }
           } else if (/^B/i.test(contextValue)) {
-            // Bill - try to get guest name by generating a preview of the bill
+            // Bill - try to get guest name and folio number by generating a preview of the bill
             try {
               // Extract the bill number (remove 'B' prefix if present)
               const billNo = contextValue.trim().replace(/^B/i, '');
@@ -605,34 +630,33 @@ const Cashier = () => {
                       const currentYear = currentDate.getFullYear();
                       const nextYear = currentYear + 1;
                       const financialYear = `${currentYear.toString().slice(-2)}-${nextYear.toString().slice(-2)}`;
-                      
                       const billResponse = await billApi.generateBill(checkIn.folioNo, financialYear);
                       if (billResponse.data.success && billResponse.data.data) {
                         const billData = billResponse.data.data;
                         // Check if this is the bill we're looking for
                         if (billData.billNo && billData.billNo.includes(billNo)) {
-                          setFormData(prev => ({ ...prev, guestName: billData.guestName || checkIn.guestName || '' }));
+                          const guestName = billData.guestName || checkIn.guestName || '';
+                          const folioNo = checkIn.folioNo;
+                          setFormData(prev => ({ ...prev, guestName }));
+                          setBillInfo({ folioNo, guestName });
                           return; // Found the bill, exit the loop
                         }
                       }
-                    } catch (billGenError) {
-                      // Continue to next check-in if bill generation fails for this one
-                      continue;
+                    } catch (billError) {
+                      // Continue to next check-in if bill generation fails
                     }
                   }
                 }
-                
-                // If we get here, we didn't find the bill
-                setFormData(prev => ({ ...prev, guestName: '' }));
-                setContextError('Bill not found');
-              } else {
-                setFormData(prev => ({ ...prev, guestName: '' }));
-                setContextError('No in-house guests found');
               }
-            } catch (billError) {
+              // If no matching bill found, clear guest name and bill info
+              setFormData(prev => ({ ...prev, guestName: '' }));
+              setBillInfo({ folioNo: '', guestName: '' });
+              setContextError('Bill not found');
+            } catch (error) {
               showNotification('Failed to fetch guest name for bill. Please try again.', false);
               setFormData(prev => ({ ...prev, guestName: '' }));
-              setContextError('Failed to fetch guest information for bill number');
+              setBillInfo({ folioNo: '', guestName: '' });
+              setContextError('Failed to fetch guest name for bill');
             }
           }
         } else {
@@ -652,10 +676,11 @@ const Cashier = () => {
     setDebounceTimer(timer);
   };
 
-  // Function to auto-fill guest name for room advance based on room number
+  // Function to auto-fill guest name and folio number for room advance based on room number
   const autoFillGuestNameForRoom = async (roomNo: string) => {
     if (!roomNo) {
       setFormData(prev => ({ ...prev, guestName: '' }));
+      setRoomAdvanceInfo({ folioNo: '', guestName: '' });
       return;
     }
     
@@ -665,15 +690,20 @@ const Cashier = () => {
       if (roomsRes.data.success) {
         const room = roomsRes.data.data.find((r: Room) => r.roomNo === roomNo);
         if (room) {
-          // Now get the guest name by room ID
+          // Now get the guest name and folio number by room ID
           const checkInRes = await checkInApi.getCheckInByRoom(room.roomId);
           if (checkInRes.data.success && checkInRes.data.data) {
-            setFormData(prev => ({ ...prev, guestName: checkInRes.data.data.guestName }));
+            const guestName = checkInRes.data.data.guestName;
+            const folioNo = checkInRes.data.data.folioNo;
+            setFormData(prev => ({ ...prev, guestName }));
+            setRoomAdvanceInfo({ folioNo, guestName });
           } else {
             setFormData(prev => ({ ...prev, guestName: '' }));
+            setRoomAdvanceInfo({ folioNo: '', guestName: '' });
           }
         } else {
           setFormData(prev => ({ ...prev, guestName: '' }));
+          setRoomAdvanceInfo({ folioNo: '', guestName: '' });
           // Only show notification if room number is provided but not found
           if (roomNo.trim() !== '') {
             showNotification(`Room ${roomNo} not found.`, false);
@@ -685,6 +715,7 @@ const Cashier = () => {
     } catch (error) {
       showNotification('Failed to fetch guest name for room advance. Please try again.', false);
       setFormData(prev => ({ ...prev, guestName: '' }));
+      setRoomAdvanceInfo({ folioNo: '', guestName: '' });
     }
   };
 
@@ -745,11 +776,9 @@ const Cashier = () => {
                         setEditForm(prev => ({ ...prev, guestName: checkIn.guestName }));
                       } else {
                         setEditForm(prev => ({ ...prev, guestName: '' }));
-                        setContextError('Folio not found');
                       }
                     } else {
                       setEditForm(prev => ({ ...prev, guestName: '' }));
-                      setContextError('Folio not found');
                     }
                   } catch (checkInError) {
                     showNotification('Failed to fetch guest name from check-in API. Please try again.', false);
@@ -767,11 +796,9 @@ const Cashier = () => {
                       setEditForm(prev => ({ ...prev, guestName: checkIn.guestName }));
                     } else {
                       setEditForm(prev => ({ ...prev, guestName: '' }));
-                      setContextError('Folio not found');
                     }
                   } else {
                     setEditForm(prev => ({ ...prev, guestName: '' }));
-                    setContextError('Folio not found');
                   }
                 } catch (checkInError) {
                   showNotification('Failed to fetch guest name from check-in API. Please try again.', false);
@@ -784,12 +811,30 @@ const Cashier = () => {
               setEditForm(prev => ({ ...prev, guestName: '' }));
               setContextError('Failed to fetch guest name for folio');
             }
-          }
-          else if (/^R/i.test(contextValue)) {
+          } else if (/^R/i.test(contextValue)) {
             // Reservation - get advances by reservation number to extract guest name
             try {
               // Remove 'R' prefix if present to match the database format
               const reservationNo = contextValue.trim().replace(/^R/i, '');
+              
+              // First try to get guest name from reservation API
+              try {
+                const reservationResponse = await reservationApi.searchReservations(reservationNo);
+                if (reservationResponse.data.success && reservationResponse.data.data.length > 0) {
+                  // Find the exact match for the reservation number
+                  const reservation = reservationResponse.data.data.find((r: any) => 
+                    r.reservationNo === reservationNo
+                  );
+                  if (reservation) {
+                    setEditForm(prev => ({ ...prev, guestName: reservation.guestName }));
+                    return; // Successfully found reservation
+                  }
+                }
+              } catch (reservationError) {
+                // Continue to advances API if reservation API fails
+              }
+              
+              // If reservation API fails, try to get guest name from advances API
               const response = await advanceApi.getAdvancesByReservation(reservationNo);
               if (response.data.success && response.data.data.length > 0) {
                 // Get guest name from the first advance record
@@ -801,29 +846,8 @@ const Cashier = () => {
                   setContextError('Guest name not found for this reservation');
                 }
               } else {
-                // If no advances found, try to get guest name from reservation API
-                try {
-                  const reservationResponse = await reservationApi.searchReservations(reservationNo);
-                  if (reservationResponse.data.success && reservationResponse.data.data.length > 0) {
-                    // Find the exact match for the reservation number
-                    const reservation = reservationResponse.data.data.find((r: any) => 
-                      r.reservationNo === reservationNo
-                    );
-                    if (reservation) {
-                      setEditForm(prev => ({ ...prev, guestName: reservation.guestName }));
-                    } else {
-                      setEditForm(prev => ({ ...prev, guestName: '' }));
-                      setContextError('Reservation not found');
-                    }
-                  } else {
-                    setEditForm(prev => ({ ...prev, guestName: '' }));
-                    setContextError('Reservation not found');
-                  }
-                } catch (reservationError) {
-                  showNotification('Failed to fetch guest name from reservation API. Please try again.', false);
-                  setEditForm(prev => ({ ...prev, guestName: '' }));
-                  setContextError('Failed to fetch guest information for reservation');
-                }
+                setEditForm(prev => ({ ...prev, guestName: '' }));
+                setContextError('Reservation not found');
               }
             } catch (guestError) {
               showNotification('Failed to fetch guest name for reservation. Please try again.', false);
@@ -831,7 +855,7 @@ const Cashier = () => {
               setContextError('Failed to fetch guest name for reservation');
             }
           } else if (/^B/i.test(contextValue)) {
-            // Bill - try to get guest name by generating a preview of the bill
+            // Bill - try to get guest name and folio number by generating a preview of the bill
             try {
               // Extract the bill number (remove 'B' prefix if present)
               const billNo = contextValue.trim().replace(/^B/i, '');
@@ -852,7 +876,6 @@ const Cashier = () => {
                       const currentYear = currentDate.getFullYear();
                       const nextYear = currentYear + 1;
                       const financialYear = `${currentYear.toString().slice(-2)}-${nextYear.toString().slice(-2)}`;
-                      
                       const billResponse = await billApi.generateBill(checkIn.folioNo, financialYear);
                       if (billResponse.data.success && billResponse.data.data) {
                         const billData = billResponse.data.data;
@@ -862,24 +885,19 @@ const Cashier = () => {
                           return; // Found the bill, exit the loop
                         }
                       }
-                    } catch (billGenError) {
-                      // Continue to next check-in if bill generation fails for this one
-                      continue;
+                    } catch (billError) {
+                      // Continue to next check-in if bill generation fails
                     }
                   }
                 }
-                
-                // If we get here, we didn't find the bill
-                setEditForm(prev => ({ ...prev, guestName: '' }));
-                setContextError('Bill not found');
-              } else {
-                setEditForm(prev => ({ ...prev, guestName: '' }));
-                setContextError('No in-house guests found');
               }
-            } catch (billError) {
+              // If no matching bill found, clear guest name and bill info
+              setEditForm(prev => ({ ...prev, guestName: '' }));
+              setContextError('Bill not found');
+            } catch (error) {
               showNotification('Failed to fetch guest name for bill. Please try again.', false);
               setEditForm(prev => ({ ...prev, guestName: '' }));
-              setContextError('Failed to fetch guest information for bill number');
+              setContextError('Failed to fetch guest name for bill');
             }
           }
         } else {
@@ -1915,6 +1933,25 @@ const Cashier = () => {
                             ? "Enter reservation number (will be prefixed with 'R')" 
                             : "Enter bill number (will be prefixed with 'B')"}
                         </p>
+                        {/* Display reservation information when available */}
+                        {recordSubTab === 'reservation' && formData.guestName && !billInfo.folioNo && (
+                          <div className="mt-2 p-2 bg-green-50 rounded-lg border border-green-200">
+                            <p className="text-sm text-green-800">
+                              <span className="font-medium">Guest:</span> {formData.guestName}
+                            </p>
+                          </div>
+                        )}
+                        {/* Display bill information when available */}
+                        {recordSubTab === 'bill' && billInfo.folioNo && (
+                          <div className="mt-2 p-2 bg-green-50 rounded-lg border border-green-200">
+                            <p className="text-sm text-green-800">
+                              <span className="font-medium">Folio:</span> {billInfo.folioNo}
+                            </p>
+                            <p className="text-sm text-green-800">
+                              <span className="font-medium">Guest:</span> {billInfo.guestName}
+                            </p>
+                          </div>
+                        )}
                       </div>
                     ) : (
                       <div>
@@ -1930,6 +1967,17 @@ const Cashier = () => {
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                           required
                         />
+                        {/* Display folio number and guest name when available */}
+                        {roomAdvanceInfo.folioNo && (
+                          <div className="mt-2 p-2 bg-blue-50 rounded-lg border border-blue-200">
+                            <p className="text-sm text-blue-800">
+                              <span className="font-medium">Folio:</span> {roomAdvanceInfo.folioNo}
+                            </p>
+                            <p className="text-sm text-blue-800">
+                              <span className="font-medium">Guest:</span> {roomAdvanceInfo.guestName}
+                            </p>
+                          </div>
+                        )}
                       </div>
                     )}
                     

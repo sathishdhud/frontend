@@ -593,12 +593,12 @@ const CheckIn: React.FC = () => {
     const value = formData[name as keyof typeof formData];
     return (
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">{label}</label>
+        <label className="block text-xs font-medium text-gray-700 mb-1">{label}</label>
         <select
           name={name}
           value={value !== undefined && value !== null && typeof value !== 'boolean' ? value.toString() : ''}
           onChange={handleInputChange}
-          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          className="w-full px-2 py-1.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-xs"
           disabled={masterDataLoading}
         >
           <option value="">{masterDataLoading ? 'Loading...' : placeholder}</option>
@@ -612,11 +612,41 @@ const CheckIn: React.FC = () => {
     );
   };
 
+  // Custom Date Input Component with Calendar Icon
+  const DateInput = ({ name, value, onChange, label, required }: { 
+    name: string; 
+    value: string; 
+    onChange: (e: React.ChangeEvent<HTMLInputElement>) => void; 
+    label: string; 
+    required?: boolean; 
+  }) => (
+    <div>
+      <label className="block text-xs font-medium text-gray-700 mb-1">
+        {label} {required && "*"}
+      </label>
+      <div className="relative">
+        <input
+          type="date"
+          name={name}
+          required={required}
+          value={value}
+          onChange={onChange}
+          className="w-full px-2 py-1.5 pr-8 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-xs"
+        />
+        <div className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
+          <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+          </svg>
+        </div>
+      </div>
+    </div>
+  );
+
   return (
     <Layout>
       <div className="space-y-6">
         <div className="flex items-center justify-between">
-          <h1 className="text-3xl font-bold text-gray-900">Check-In Guest</h1>
+          <h1 className="text-2xl font-bold text-gray-900">Check-In Guest</h1>
           <div className="text-sm text-gray-500">
             Process guest arrivals and update room statuses.
           </div>
@@ -635,12 +665,17 @@ const CheckIn: React.FC = () => {
           </div>
         )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Main Check-in Form */}
-          <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-gray-200">
-            <div className="p-6 border-b border-gray-200">
+          <div className="lg:col-span-2 bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
+            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-4 border-b border-gray-200">
               <div className="flex items-center justify-between">
-                <h2 className="text-xl font-semibold text-gray-900">Check-In Guest</h2>
+                <h2 className="text-lg font-semibold text-gray-900 flex items-center">
+                  <svg className="w-5 h-5 mr-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
+                  </svg>
+                  Check-In Guest
+                </h2>
                 <div className="flex items-center space-x-3">
                   <label className="flex items-center space-x-2 cursor-pointer">
                     <span className="text-sm font-medium text-gray-700">Walk-In Guest</span>
@@ -661,42 +696,50 @@ const CheckIn: React.FC = () => {
               </div>
             </div>
 
-            <form onSubmit={handleSubmit} className="p-6">
+            <form onSubmit={handleSubmit} className="p-4">
               {/* Tabs */}
-              <div className="border-b border-gray-200 mb-6">
-                <nav className="-mb-px flex space-x-8">
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab('basic')}
-                    className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                      activeTab === 'basic'
-                        ? 'border-blue-500 text-blue-600'
-                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                    }`}
-                  >
+              <div className="flex border-b border-gray-200 bg-gray-50 mb-4">
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('basic')}
+                  className={`px-4 py-3 text-xs font-medium flex-1 text-center transition-colors ${
+                    activeTab === 'basic'
+                      ? 'border-b-2 border-blue-600 text-blue-600 bg-white'
+                      : 'text-gray-600 hover:text-gray-800 hover:bg-gray-100'
+                  }`}
+                >
+                  <div className="flex items-center justify-center">
+                    <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path>
+                    </svg>
                     Basic Information
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setActiveTab('additional')}
-                    className={`py-2 px-1 border-b-2 font-medium text-sm ${
-                      activeTab === 'additional'
-                        ? 'border-blue-500 text-blue-600'
-                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                    }`}
-                  >
+                  </div>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setActiveTab('additional')}
+                  className={`px-4 py-3 text-xs font-medium flex-1 text-center transition-colors ${
+                    activeTab === 'additional'
+                      ? 'border-b-2 border-blue-600 text-blue-600 bg-white'
+                      : 'text-gray-600 hover:text-gray-800 hover:bg-gray-100'
+                  }`}
+                >
+                  <div className="flex items-center justify-center">
+                    <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path>
+                    </svg>
                     Additional Details
-                  </button>
-                </nav>
+                  </div>
+                </button>
               </div>
 
               {/* Tab Content */}
               {activeTab === 'basic' ? (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                  {/* Reservation Number */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mb-4">
+                  {/* Reservation Number - Same width as other fields */}
                   {!isWalkIn && (
-                    <div className="md:col-span-3">
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
                         Reservation Number
                       </label>
                       <div className="relative">
@@ -705,7 +748,7 @@ const CheckIn: React.FC = () => {
                           name="reservationNo"
                           value={formData.reservationNo}
                           onChange={handleInputChange}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                          className="w-full px-2 py-1.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-xs"
                         />
                         {autoFillLoading && (
                           <div className="absolute inset-y-0 right-0 flex items-center pr-3">
@@ -715,10 +758,10 @@ const CheckIn: React.FC = () => {
                       </div>
                       {/* Reservation Info Display */}
                       {reservationInfo && (
-                        <div className="mt-2 p-3 bg-blue-50 rounded-lg border border-blue-100">
+                        <div className="mt-2 p-2 bg-blue-50 rounded-lg border border-blue-100">
                           <div className="flex justify-between items-center">
                             <div>
-                              <p className="text-sm font-medium text-blue-800">{reservationInfo.guestName}</p>
+                              <p className="text-xs font-medium text-blue-800">{reservationInfo.guestName}</p>
                               <p className="text-xs text-blue-600">
                                 Rooms: {reservationInfo.noOfRooms} | 
                                 Checked In: {reservationInfo.roomsCheckedIn || 0} | 
@@ -727,11 +770,11 @@ const CheckIn: React.FC = () => {
                             </div>
                             <div>
                               {reservationInfo.roomsCheckedIn >= reservationInfo.noOfRooms ? (
-                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
                                   Full
                                 </span>
                               ) : (
-                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
                                   Available
                                 </span>
                               )}
@@ -744,7 +787,7 @@ const CheckIn: React.FC = () => {
 
                   {/* Guest Name */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
                       Guest Name
                     </label>
                     <div className="relative">
@@ -754,7 +797,7 @@ const CheckIn: React.FC = () => {
                         required
                         value={formData.guestName}
                         onChange={handleInputChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        className="w-full px-2 py-1.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-xs"
                       />
                       {autoFillLoading && (
                         <div className="absolute inset-y-0 right-0 flex items-center pr-3">
@@ -763,54 +806,184 @@ const CheckIn: React.FC = () => {
                       )}
                     </div>
                   </div>
+
+                  {/* Arrival Date */}
+                  <DateInput 
+                    name="arrivalDate"
+                    value={formData.arrivalDate}
+                    onChange={handleInputChange}
+                    label="Arrival Date"
+                    required
+                  />
+
+                  {/* Departure Date */}
+                  <DateInput 
+                    name="departureDate"
+                    value={formData.departureDate}
+                    onChange={handleInputChange}
+                    label="Departure Date"
+                    required
+                  />
+
+                  {/* No of Days */}
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                      No of Days
+                    </label>
+                    <input
+                      type="number"
+                      name="noOfDays"
+                      min="1"
+                      value={formData.noOfDays}
+                      onChange={handleInputChange}
+                      className="w-full px-2 py-1.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-xs"
+                    />
+                  </div>
+
+                  {/* No of Persons */}
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                      No of Persons
+                    </label>
+                    <input
+                      type="number"
+                      name="noOfPersons"
+                      min="1"
+                      value={formData.noOfPersons}
+                      onChange={handleInputChange}
+                      className="w-full px-2 py-1.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-xs"
+                    />
+                  </div>
+
+                  {/* Mobile Number */}
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                      Mobile Number
+                    </label>
+                    <input
+                      type="tel"
+                      name="mobileNumber"
+                      value={formData.mobileNumber}
+                      onChange={handleInputChange}
+                      className="w-full px-2 py-1.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-xs"
+                    />
+                  </div>
+
+                  {/* Rate */}
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                      Rate (₹)
+                    </label>
+                    <input
+                      type="number"
+                      name="rate"
+                      min="0"
+                      value={formData.rate}
+                      onChange={handleInputChange}
+                      className="w-full px-2 py-1.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-xs"
+                    />
+                  </div>
+
+                  {/* Including GST Toggle */}
+                  <div>
+                    <label className="flex items-center space-x-2 mt-2">
+                      <input
+                        type="checkbox"
+                        name="includingGst"
+                        checked={formData.includingGst}
+                        onChange={handleInputChange}
+                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                      />
+                      <span className="text-xs font-medium text-gray-700">Including GST</span>
+                    </label>
+                  </div>
+
+                  {/* Remarks */}
+                  <div className="md:col-span-3">
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                      Remarks
+                    </label>
+                    <textarea
+                      name="remarks"
+                      value={formData.remarks}
+                      onChange={handleInputChange}
+                      rows={2}
+                      className="w-full px-2 py-1.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-xs"
+                      placeholder="Any special requests or notes"
+                    />
+                  </div>
+
+                  {/* Room Selection */}
+                  <div className="md:col-span-3">
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                      Room Number <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      name="roomId"
+                      required
+                      value={formData.roomId}
+                      onChange={handleInputChange}
+                      className="w-full px-2 py-1.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-xs"
+                    >
+                      <option value="">Select a vacant room</option>
+                      {availableRooms.map(room => (
+                        <option key={room.roomId} value={room.roomId}>
+                          Room {room.roomNo} - {room.roomTypeName || 'Standard'}
+                        </option>
+                      ))}
+                    </select>
+                    <p className="text-xs text-gray-500 mt-1">
+                      Note: For walk-in guests, room status will automatically update to "OD (Occupied Dirty)" upon check-in.
+                    </p>
+                  </div>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mb-4">
                   {/* Additional Details Fields */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Email ID</label>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Email ID</label>
                     <input
                       type="email"
                       name="emailId"
                       value={formData.emailId}
                       onChange={handleInputChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full px-2 py-1.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-xs"
                       placeholder="Enter email address"
                     />
                   </div>
                   
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">ID Proof 1</label>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">ID Proof 1</label>
                     <input
                       type="text"
                       name="idProof1"
                       value={formData.idProof1}
                       onChange={handleInputChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full px-2 py-1.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-xs"
                       placeholder="e.g., Passport: P12345678"
                     />
                   </div>
                   
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">ID Proof 2</label>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">ID Proof 2</label>
                     <input
                       type="text"
                       name="idProof2"
                       value={formData.idProof2}
                       onChange={handleInputChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full px-2 py-1.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-xs"
                       placeholder="e.g., Driving License: DL987654321"
                     />
                   </div>
                   
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">ID Proof 3</label>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">ID Proof 3</label>
                     <input
                       type="text"
                       name="idProof3"
                       value={formData.idProof3}
                       onChange={handleInputChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full px-2 py-1.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-xs"
                       placeholder="e.g., Aadhar Card: 1234-5678-9012"
                     />
                   </div>
@@ -831,13 +1004,13 @@ const CheckIn: React.FC = () => {
                   {renderDropdown("arrivalModeId", "Arrival Mode", arrivalModes, "id", "arrivalMode", "Select Arrival Mode")}
                   
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Arrival Details</label>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Arrival Details</label>
                     <input
                       type="text"
                       name="arrivalDetails"
                       value={formData.arrivalDetails}
                       onChange={handleInputChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      className="w-full px-2 py-1.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-xs"
                       placeholder="e.g., Flight AA123 at 14:30"
                     />
                   </div>
@@ -853,193 +1026,65 @@ const CheckIn: React.FC = () => {
                 </div>
               )}
 
-              {/* Common fields that appear in both tabs */}
-              {activeTab === 'basic' && (
-                <>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                    {/* Arrival Date */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Arrival Date
-                      </label>
-                      <input
-                        type="date"
-                        name="arrivalDate"
-                        required
-                        value={formData.arrivalDate}
-                        onChange={handleInputChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      />
-                    </div>
-
-                    {/* Departure Date */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Departure Date
-                      </label>
-                      <input
-                        type="date"
-                        name="departureDate"
-                        required
-                        value={formData.departureDate}
-                        onChange={handleInputChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      />
-                    </div>
-
-                    {/* No of Days */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        No of Days
-                      </label>
-                      <input
-                        type="number"
-                        name="noOfDays"
-                        min="1"
-                        value={formData.noOfDays}
-                        onChange={handleInputChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      />
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                    {/* No of Persons */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        No of Persons
-                      </label>
-                      <input
-                        type="number"
-                        name="noOfPersons"
-                        min="1"
-                        value={formData.noOfPersons}
-                        onChange={handleInputChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      />
-                    </div>
-
-                    {/* Mobile Number */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Mobile Number
-                      </label>
-                      <input
-                        type="tel"
-                        name="mobileNumber"
-                        value={formData.mobileNumber}
-                        onChange={handleInputChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      />
-                    </div>
-
-                    {/* Rate */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Rate
-                      </label>
-                      <input
-                        type="number"
-                        name="rate"
-                        min="0"
-                        value={formData.rate}
-                        onChange={handleInputChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      />
-                    </div>
-                  </div>
-
-                  {/* Including GST Toggle */}
-                  <div className="mb-6">
-                    <label className="flex items-center space-x-3">
-                      <input
-                        type="checkbox"
-                        name="includingGst"
-                        checked={formData.includingGst}
-                        onChange={handleInputChange}
-                        className="w-5 h-5 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                      />
-                      <span className="text-sm font-medium text-gray-700">Including GST</span>
-                    </label>
-                  </div>
-
-                  {/* Remarks */}
-                  <div className="mb-6">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Remarks
-                    </label>
-                    <textarea
-                      name="remarks"
-                      value={formData.remarks}
-                      onChange={handleInputChange}
-                      rows={3}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      placeholder="Any special requests or notes"
-                    />
-                  </div>
-
-                  {/* Room Selection */}
-                  <div className="mb-6">
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Room Number <span className="text-red-500">*</span>
-                    </label>
-                    <select
-                      name="roomId"
-                      required
-                      value={formData.roomId}
-                      onChange={handleInputChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    >
-                      <option value="">Select a vacant room</option>
-                      {availableRooms.map(room => (
-                        <option key={room.roomId} value={room.roomId}>
-                          Room {room.roomNo} - {room.roomTypeName || 'Standard'}
-                        </option>
-                      ))}
-                    </select>
-                    <p className="text-xs text-gray-500 mt-1">
-                      Note: For walk-in guests, room status will automatically update to "OD (Occupied Dirty)" upon check-in.
-                    </p>
-                  </div>
-                </>
-              )}
-
               {/* Form Actions */}
-              <div className="flex space-x-4">
-                <button
-                  type="submit"
-                  disabled={loading}
-                  className="flex-1 bg-gradient-to-r from-blue-600 to-purple-600 text-white font-semibold py-3 px-4 rounded-lg hover:from-blue-700 hover:to-purple-700 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {loading ? 'Processing...' : 'Check-In'}
-                </button>
+              <div className="mt-6 pt-4 border-t border-gray-200 flex justify-between items-center">
                 <button
                   type="button"
                   onClick={handleClear}
-                  className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                  className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 text-xs font-medium flex items-center"
                 >
+                  <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                  </svg>
                   Clear
+                </button>
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="px-6 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg hover:from-blue-700 hover:to-indigo-700 disabled:opacity-50 text-xs font-medium flex items-center shadow-md"
+                >
+                  {loading ? (
+                    <>
+                      <svg className="animate-spin -ml-1 mr-2 h-3 w-3 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Processing...
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
+                      </svg>
+                      Check-In
+                    </>
+                  )}
                 </button>
               </div>
             </form>
           </div>
 
           {/* Advance Details Sidebar */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-            <div className="p-6 border-b border-gray-200">
-              <h3 className="text-lg font-semibold text-gray-900">Advance Details</h3>
-              <p className="text-sm text-gray-600 mt-1">
+          <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
+            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-4 border-b border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-900 flex items-center">
+                <svg className="w-5 h-5 mr-2 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+                Advance Details
+              </h3>
+              <p className="text-sm text-gray-600 mt-1 ml-7">
                 Payments recorded for this reservation or folio.
               </p>
             </div>
 
-            <div className="p-6 space-y-4">
+            <div className="p-4 space-y-3 max-h-[calc(100vh-250px)] overflow-y-auto">
               {advances.length > 0 ? (
                 advances.map((advance, index) => (
-                  <div key={index} className="bg-gray-50 p-4 rounded-lg">
+                  <div key={index} className="bg-gray-50 p-3 rounded-lg border border-gray-100">
                     <div className="flex justify-between items-start mb-2">
-                      <span className="text-lg font-semibold text-green-600">
-                        $ {advance.amount.toFixed(2)}
+                      <span className="text-base font-semibold text-green-600">
+                        ₹ {advance.amount.toFixed(2)}
                       </span>
                       <span className="text-xs text-gray-500">{advance.date}</span>
                     </div>
@@ -1052,7 +1097,10 @@ const CheckIn: React.FC = () => {
                 ))
               ) : (
                 <div className="text-center py-8">
-                  <p className="text-gray-500 text-sm">No advance payments found</p>
+                  <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                  </svg>
+                  <p className="mt-2 text-sm text-gray-500">No advance payments found</p>
                 </div>
               )}
             </div>

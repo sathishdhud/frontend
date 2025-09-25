@@ -29,8 +29,8 @@ import {
   SalesReceipt 
 } from '../types/api';
 
-//const API_BASE_URL = 'https://backend-production-1f41.up.railway.app/api'
-const API_BASE_URL = 'http://localhost:8080/api';
+const API_BASE_URL = 'https://backend-production-1f41.up.railway.app/api'
+//const API_BASE_URL = 'http://localhost:8080/api';
 
 // Create axios instance
 const apiClient = axios.create({

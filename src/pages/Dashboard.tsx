@@ -663,8 +663,8 @@ const Dashboard: React.FC = () => {
       const roomResponse = await roomApi.getRoomById(roomId);
       if (roomResponse.data.success && roomResponse.data.data.folioNo) {
         const folioNo = roomResponse.data.data.folioNo;
-        // Navigate to bill page with folio number
-        navigate(`/bill/${folioNo}`);
+        // Navigate to the GenerateBill page with folio number
+        navigate(`/generate-bill?folioNo=${folioNo}`);
       } else {
         setDetailsError('No bill found for this room');
       }
