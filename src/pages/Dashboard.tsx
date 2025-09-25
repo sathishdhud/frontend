@@ -376,8 +376,9 @@ const Dashboard: React.FC = () => {
       const response = await roomApi.getRooms();
       if (response.data.success) {
         setRooms(response.data.data);
-        // Update floors when rooms are fetched
-        const uniqueFloors = Array.from(new Set(response.data.data.map((room: Room) => room.floor)));
+        // Update floors when rooms are fetched and sort them
+        const uniqueFloors = Array.from(new Set(response.data.data.map((room: Room) => room.floor)))
+          .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
         setFloors(uniqueFloors);
       }
     } catch (error) {
@@ -402,7 +403,11 @@ const Dashboard: React.FC = () => {
     try {
       const response = await masterDataApi.getRoomTypes();
       if (response.data.success) {
-        setRoomTypes(response.data.data);
+        // Sort room types by name in ascending order
+        const sortedRoomTypes = response.data.data.sort((a, b) => 
+          a.typeName.localeCompare(b.typeName)
+        );
+        setRoomTypes(sortedRoomTypes);
       }
     } catch (error) {
       console.error('Failed to fetch room types:', error);
@@ -410,8 +415,9 @@ const Dashboard: React.FC = () => {
   };
 
   const fetchFloors = () => {
-    // Extract unique floors from rooms
-    const uniqueFloors = Array.from(new Set(rooms.map(room => room.floor)));
+    // Extract unique floors from rooms and sort them numerically
+    const uniqueFloors = Array.from(new Set(rooms.map(room => room.floor)))
+      .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
     setFloors(uniqueFloors);
   };
 
@@ -807,6 +813,14 @@ const Dashboard: React.FC = () => {
       return false;
     }
     return true;
+  }).sort((a, b) => {
+    // First sort by floor (numeric if possible, otherwise lexicographic)
+    const floorComparison = a.floor.localeCompare(b.floor, undefined, { numeric: true });
+    if (floorComparison !== 0) {
+      return floorComparison;
+    }
+    // If floors are the same, sort by room number (numeric)
+    return a.roomNo.localeCompare(b.roomNo, undefined, { numeric: true });
   });
 
   const totalPages = Math.ceil(filteredRooms.length / roomsPerPage);
