@@ -15,13 +15,14 @@ interface PaymentFormData {
 
 const BillGeneration: React.FC = () => {
   const location = useLocation();
-  // Tab state
-  const [activeTab, setActiveTab] = useState<'reservation' | 'folio'>('reservation');
+  // Tab state - added 'room' tab
+  const [activeTab, setActiveTab] = useState<'reservation' | 'folio' | 'room'>('reservation');
   
   // Form state
   const [formData, setFormData] = useState({
     reservationNo: '',
     folioNo: '',
+    roomNo: '', // Added roomNo field
   });
 
   // Bill data state
@@ -334,6 +335,35 @@ const BillGeneration: React.FC = () => {
       return null;
     } catch (error) {
       console.error('Error searching for check-in by reservation:', error);
+      return null;
+    }
+  };
+
+  // Function to find check-in by room number
+  const findCheckInByRoom = async (roomNo: string): Promise<CheckIn | null> => {
+    try {
+      console.log('Searching for check-in with room number:', roomNo);
+      
+      // First, find the room by room number
+      const roomResponse = await roomApi.getRooms();
+      if (roomResponse.data.success) {
+        const room = roomResponse.data.data.find((r: Room) => r.roomNo === roomNo);
+        if (room) {
+          console.log('Found room:', room);
+          
+          // Now find check-in by room ID
+          const checkInResponse = await checkInApi.getCheckInByRoom(room.roomId);
+          if (checkInResponse.data.success) {
+            console.log('Found check-in for room:', checkInResponse.data.data);
+            return checkInResponse.data.data;
+          }
+        }
+      }
+      
+      console.log('Check-in not found for room:', roomNo);
+      return null;
+    } catch (error) {
+      console.error('Error searching for check-in by room:', error);
       return null;
     }
   };
@@ -681,6 +711,46 @@ const BillGeneration: React.FC = () => {
           errorMessage += `. Please verify the folio number "${folioNo}" exists and the guest has been checked in.`;
         }
       } else if (error.message) {
+        errorMessage = error.message;
+      }
+      alert(`Failed to generate bill: ${errorMessage}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Function to generate bill by room number
+  const generateBillByRoom = async (roomNo: string) => {
+    if (!roomNo) {
+      alert('Please enter a room number.');
+      return;
+    }
+    
+    setLoading(true);
+    try {
+      // First, find the check-in for this room
+      let checkInData = await findCheckInByRoom(roomNo);
+      
+      if (!checkInData) {
+        alert(`No check-in found for room number: ${roomNo}`);
+        setLoading(false);
+        return;
+      }
+      
+      // Use the folio number from the check-in to generate the bill
+      const folioNo = checkInData.folioNo;
+      if (!folioNo) {
+        alert(`No folio number found for room: ${roomNo}`);
+        setLoading(false);
+        return;
+      }
+      
+      // Now generate the bill using the existing folio-based function
+      await generateBillByFolio(folioNo);
+    } catch (error: any) {
+      console.error('Failed to generate bill by room:', error);
+      let errorMessage = 'Failed to generate bill. Please try again.';
+      if (error.message) {
         errorMessage = error.message;
       }
       alert(`Failed to generate bill: ${errorMessage}`);
@@ -1113,6 +1183,15 @@ const BillGeneration: React.FC = () => {
       }
       
       generateBillByReservation(reservationNo);
+    } else if (activeTab === 'room') {
+      const roomNo = formData.roomNo.trim();
+      
+      if (!roomNo) {
+        alert('Please enter a room number.');
+        return;
+      }
+      
+      generateBillByRoom(roomNo);
     } else {
       let folioNo = formData.folioNo.trim();
       
@@ -1143,7 +1222,7 @@ const BillGeneration: React.FC = () => {
   };
 
   const handleClear = () => {
-    setFormData({ reservationNo: '', folioNo: '' });
+    setFormData({ reservationNo: '', folioNo: '', roomNo: '' });
     setBillData(null);
     setBillTransactions([]);
     setBillAdvances([]);
@@ -1251,15 +1330,24 @@ const BillGeneration: React.FC = () => {
         const newPaidAmount = (billData.paidAmount || 0) + paymentForm.paymentAmount;
         const newBalanceAmount = Math.max(0, billData.balanceAmount - paymentForm.paymentAmount);
         
+        // Instead of setting to "Settled", we'll keep it as "Partially Paid" or "Pending"
+        // This prevents automatic settlement during bill printing
+        let newSettlementStatus = billData.settlementStatus || 'Pending';
+        if (newBalanceAmount === 0 && newSettlementStatus !== 'Settled') {
+          newSettlementStatus = 'Fully Paid'; // Changed from 'Settled' to 'Fully Paid'
+        } else if (newBalanceAmount > 0 && newPaidAmount > 0) {
+          newSettlementStatus = 'Partially Paid';
+        }
+        
         setBillData((prev: any) => ({
           ...prev,
           billNo: billNo,
           folioNo: folioNo,
           paidAmount: newPaidAmount,
           balanceAmount: newBalanceAmount,
-          settlementStatus: newBalanceAmount === 0 ? 'Settled' : 'Partially Paid'
+          settlementStatus: newSettlementStatus
         }));
-        
+
         alert('Payment processed successfully!');
         setShowPaymentForm(false);
         
@@ -1427,7 +1515,7 @@ const BillGeneration: React.FC = () => {
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
             <h2 className="text-xl font-semibold text-gray-900 mb-4">Bill Generation</h2>
             
-            {/* Tabs */}
+            {/* Tabs - added 'room' tab */}
             <div className="flex border-b border-gray-200 mb-6">
               <button
                 className={`py-2 px-4 font-medium text-sm ${activeTab === 'reservation' ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-gray-500 hover:text-gray-700'}`}
@@ -1440,6 +1528,13 @@ const BillGeneration: React.FC = () => {
                 onClick={() => setActiveTab('folio')}
               >
                 By Folio
+              </button>
+              {/* Added 'By Room' tab */}
+              <button
+                className={`py-2 px-4 font-medium text-sm ${activeTab === 'room' ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-gray-500 hover:text-gray-700'}`}
+                onClick={() => setActiveTab('room')}
+              >
+                By Room
               </button>
             </div>
             
@@ -1459,6 +1554,22 @@ const BillGeneration: React.FC = () => {
                     required
                   />
                   <p className="mt-1 text-xs text-gray-500">Enter the reservation number for which you want to generate a bill</p>
+                </div>
+              ) : activeTab === 'room' ? (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Room Number *
+                  </label>
+                  <input
+                    type="text"
+                    name="roomNo"
+                    value={formData.roomNo}
+                    onChange={handleInputChange}
+                    placeholder="Enter room number to generate bill"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                    required
+                  />
+                  <p className="mt-1 text-xs text-gray-500">Enter the room number for which you want to generate a bill</p>
                 </div>
               ) : (
                 <div>
@@ -1493,7 +1604,7 @@ const BillGeneration: React.FC = () => {
                 >
                   <span>Clear</span>
                 </button>
-                {activeTab === 'folio' && (
+                {(activeTab === 'folio' || activeTab === 'room') && (
                   <button
                     type="button"
                     onClick={listAllCheckIns}
@@ -1886,6 +1997,7 @@ const BillGeneration: React.FC = () => {
     </Layout>
   );
 };
+
 
 const RelatedBillRow: React.FC<{ bill: any }> = ({ bill }) => {
   // Calculate room charges

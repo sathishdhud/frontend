@@ -44,7 +44,7 @@ const Reservations: React.FC = () => {
     noOfRooms: 1,
     mobileNumber: "",
     emailId: "",
-    rate: 0,
+    rate: '',
     includingGst: "N" as "Y" | "N",
     remarks: "",
     idProof1: "",
@@ -758,7 +758,7 @@ const Reservations: React.FC = () => {
       noOfRooms: 1,
       mobileNumber: "",
       emailId: "",
-      rate: 0,
+      rate: '',
       includingGst: "N",
       remarks: "",
       idProof1: "",
@@ -1174,8 +1174,8 @@ const Reservations: React.FC = () => {
                     <input
                       type="number"
                       name="rate"
-                      min="0"
-                      step="0.01"
+                     
+                      
                       value={formData.rate}
                       onChange={handleInputChange}
                       onKeyDown={(e) => handleKeyDown(e, "includingGst")}

@@ -353,6 +353,7 @@ export const checkInApi = {
 export const advanceApi = {
   createAdvanceForReservation: (advance: Omit<Advance, 'advanceId' | 'receiptNo'>): Promise<AxiosResponse<ApiResponse<Advance>>> =>
     apiClient.post('/advances/reservation', advance),
+
   
   createAdvanceForInHouse: (advance: Omit<Advance, 'advanceId' | 'receiptNo'>): Promise<AxiosResponse<ApiResponse<Advance>>> =>
     apiClient.post('/advances/inhouse', advance),
@@ -365,6 +366,8 @@ export const advanceApi = {
   
   getAdvancesByReservation: (reservationNo: string): Promise<AxiosResponse<ApiResponse<Advance[]>>> =>
     apiClient.get(`/advances/reservation/${reservationNo}`),
+  getAllAdvances: (): Promise<AxiosResponse<ApiResponse<Advance[]>>> =>
+    apiClient.get('/advances'),
   
   getAdvancesByFolio: (folioNo: string): Promise<AxiosResponse<ApiResponse<Advance[]>>> =>
     apiClient.get(`/advances/folio/${folioNo}`),
@@ -376,6 +379,14 @@ export const advanceApi = {
   // New API endpoint to get guest name by reservation number
   getGuestNameByReservation: (reservationNo: string): Promise<AxiosResponse<ApiResponse<string>>> =>
     apiClient.get(`/advances/reservation/${reservationNo}/guest-name`),
+  
+  // Update an existing advance
+  updateAdvance: (advanceId: string, advanceData: Partial<Advance>): Promise<AxiosResponse<ApiResponse<Advance>>> =>
+    apiClient.put(`/advances/${advanceId}`, advanceData),
+  
+  // Delete an advance
+  deleteAdvance: (advanceId: string): Promise<AxiosResponse<ApiResponse<void>>> =>
+    apiClient.delete(`/advances/${advanceId}`),
 };
 
 // Master Data APIs

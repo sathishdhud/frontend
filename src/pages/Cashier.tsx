@@ -24,7 +24,7 @@ const Cashier = () => {
     contextValue: '',
     date: new Date().toISOString().split('T')[0],
     modeOfPaymentId: '',
-    amount: 0,
+    amount: '',
     details: '',
     narration: '',
     guestName: '',
@@ -50,7 +50,25 @@ const Cashier = () => {
   const [reprintData, setReprintData] = useState({
     billNo: '',
   });
-  
+
+  const handleClearForm = () => {
+    setFormData({
+      receiptNumber: `AUTO-GEN-${Math.floor(Math.random() * 9000 + 1000)}`,
+      contextValue: '',
+      date: new Date().toISOString().split('T')[0],
+      modeOfPaymentId: '',
+      amount: '',
+      details: '',
+      narration: '',
+      guestName: '',
+      creditCardCompany: '',
+      cardNumber: '',
+      onlineCompanyName: '',
+      roomNo: '',
+    });
+    setAttemptedAutoFill(false);
+    setContextError(null);
+  };
   // Expenses Entry state
   const [expensesData, setExpensesData] = useState({
     folioNo: '',
@@ -84,13 +102,13 @@ const Cashier = () => {
     shiftDate: new Date().toISOString().split('T')[0],
   });
   
-  // Split Bill state
+  // Split Bill state - Fixed remainingAmount to be string initially
   const [splitBillData, setSplitBillData] = useState({
     folioNo: '',
     guestName: '',
     originalAmount: 0,
     splitAmount: 0,
-    remainingAmount: 0,
+    remainingAmount: '', // Changed from 0 to empty string
   });
   
   // Summary state
@@ -111,6 +129,10 @@ const Cashier = () => {
   // Add pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const [recordsPerPage] = useState(8);
+  
+  // Add state for filtering advances
+  const [viewFilter, setViewFilter] = useState<'all' | 'reservation' | 'bill' | 'room'>('all');
+  const [roomFilter, setRoomFilter] = useState('');
   
   // Add state for editing advance
   const [editingAdvance, setEditingAdvance] = useState<Advance | null>(null);
@@ -136,6 +158,9 @@ const Cashier = () => {
   const [attemptedAutoFill, setAttemptedAutoFill] = useState(false);
   // Add state for context value error
   const [contextError, setContextError] = useState<string | null>(null);
+  
+  // Add state for room information
+  const [roomInfo, setRoomInfo] = useState<Record<string, string>>({}); // folioNo -> roomNo mapping
 
   // Modal states
   const [modalOpen, setModalOpen] = useState(false);
@@ -173,6 +198,7 @@ const Cashier = () => {
     fetchAccountHeads();
     fetchSettlementTypes();
     fetchSummary();
+    fetchRoomInfo(); // Fetch room information on component mount
     
     // Cleanup function to clear timeout on unmount
     return () => {
@@ -181,6 +207,13 @@ const Cashier = () => {
       }
     };
   }, [debounceTimer]);
+
+  // Add another useEffect to fetch advances when view filter or room filter changes
+  useEffect(() => {
+    if (activeTab === 'view') {
+      fetchAdvances();
+    }
+  }, [viewFilter, roomFilter, activeTab]);
 
   const fetchPaymentModes = async () => {
     try {
@@ -326,42 +359,131 @@ const Cashier = () => {
     try {
       setAdvancesLoading(true);
       
-      // Fetch all reservations and in-house guests
-      const [reservationsRes, checkInsRes] = await Promise.all([
-        reservationApi.getReservations(),
-        checkInApi.getInHouseGuests()
-      ]);
-      
       let allAdvances: Advance[] = [];
       
-      // Get advances for all reservations
-      if (reservationsRes.data.success) {
-        const reservationAdvances = await Promise.all(
-          reservationsRes.data.data.map(async (reservation: Reservation) => {
-            try {
-              const res = await advanceApi.getAdvancesByReservation(reservation.reservationNo);
-              return res.data.success ? res.data.data : [];
-            } catch (error) {
-              return [];
+      // Filter based on viewFilter
+      if (viewFilter === 'reservation') {
+        // Get advances for all reservations
+        const reservationsRes = await reservationApi.getReservations();
+        if (reservationsRes.data.success) {
+          const reservationAdvances = await Promise.all(
+            reservationsRes.data.data.map(async (reservation: Reservation) => {
+              try {
+                const res = await advanceApi.getAdvancesByReservation(reservation.reservationNo);
+                return res.data.success ? res.data.data : [];
+              } catch (error) {
+                return [];
+              }
+            })
+          );
+          allAdvances = allAdvances.concat(...reservationAdvances);
+        }
+      } else if (viewFilter === 'bill') {
+        // Get advances for all in-house guests (bill advances are linked to folios)
+        const checkInsRes = await checkInApi.getInHouseGuests();
+        if (checkInsRes.data.success) {
+          const checkInAdvances = await Promise.all(
+            checkInsRes.data.data.map(async (checkIn: CheckIn) => {
+              try {
+                const res = await advanceApi.getAdvancesByFolio(checkIn.folioNo || '');
+                return res.data.success ? res.data.data : [];
+              } catch (error) {
+                return [];
+              }
+            })
+          );
+          allAdvances = allAdvances.concat(...checkInAdvances);
+        }
+      } else if (viewFilter === 'room') {
+        // Get advances for specific room or all rooms
+        if (roomFilter.trim() !== '') {
+          // Filter by specific room number
+          try {
+            // First get the room by room number
+            const roomsRes = await roomApi.getRooms();
+            if (roomsRes.data.success) {
+              const room = roomsRes.data.data.find(r => r.roomNo === roomFilter.trim());
+              if (room) {
+                // Get check-in for this room
+                const checkInRes = await checkInApi.getCheckInByRoom(room.roomId);
+                if (checkInRes.data.success && checkInRes.data.data) {
+                  // Get advances for this folio
+                  const res = await advanceApi.getAdvancesByFolio(checkInRes.data.data.folioNo || '');
+                  if (res.data.success) {
+                    allAdvances = res.data.data;
+                  }
+                }
+              } else {
+                // Room not found, clear advances
+                allAdvances = [];
+              }
             }
-          })
-        );
-        allAdvances = allAdvances.concat(...reservationAdvances);
-      }
-      
-      // Get advances for all in-house guests
-      if (checkInsRes.data.success) {
-        const checkInAdvances = await Promise.all(
-          checkInsRes.data.data.map(async (checkIn: CheckIn) => {
-            try {
-              const res = await advanceApi.getAdvancesByFolio(checkIn.folioNo || '');
-              return res.data.success ? res.data.data : [];
-            } catch (error) {
-              return [];
-            }
-          })
-        );
-        allAdvances = allAdvances.concat(...checkInAdvances);
+          } catch (error) {
+            console.error('Error fetching advances by room:', error);
+            allAdvances = [];
+          }
+        } else {
+          // Get advances for all rooms (all in-house guests)
+          const checkInsRes = await checkInApi.getInHouseGuests();
+          if (checkInsRes.data.success) {
+            const checkInAdvances = await Promise.all(
+              checkInsRes.data.data.map(async (checkIn: CheckIn) => {
+                try {
+                  const res = await advanceApi.getAdvancesByFolio(checkIn.folioNo || '');
+                  return res.data.success ? res.data.data : [];
+                } catch (error) {
+                  return [];
+                }
+              })
+            );
+            allAdvances = allAdvances.concat(...checkInAdvances);
+          }
+        }
+      } else {
+        // Default: get all advances using the dedicated API endpoint
+        try {
+          const response = await advanceApi.getAllAdvances();
+          if (response.data.success) {
+            allAdvances = response.data.data;
+          }
+        } catch (error) {
+          console.error('Error fetching all advances:', error);
+          // Fallback to previous method if the new endpoint fails
+          const [reservationsRes, checkInsRes] = await Promise.all([
+            reservationApi.getReservations(),
+            checkInApi.getInHouseGuests()
+          ]);
+          
+          // Get advances for all reservations
+          if (reservationsRes.data.success) {
+            const reservationAdvances = await Promise.all(
+              reservationsRes.data.data.map(async (reservation: Reservation) => {
+                try {
+                  const res = await advanceApi.getAdvancesByReservation(reservation.reservationNo);
+                  return res.data.success ? res.data.data : [];
+                } catch (error) {
+                  return [];
+                }
+              })
+            );
+            allAdvances = allAdvances.concat(...reservationAdvances);
+          }
+          
+          // Get advances for all in-house guests
+          if (checkInsRes.data.success) {
+            const checkInAdvances = await Promise.all(
+              checkInsRes.data.data.map(async (checkIn: CheckIn) => {
+                try {
+                  const res = await advanceApi.getAdvancesByFolio(checkIn.folioNo || '');
+                  return res.data.success ? res.data.data : [];
+                } catch (error) {
+                  return [];
+                }
+              })
+            );
+            allAdvances = allAdvances.concat(...checkInAdvances);
+          }
+        }
       }
       
       // Sort advances by date (newest first)
@@ -376,6 +498,8 @@ const Cashier = () => {
       setAdvances([]);
     } finally {
       setAdvancesLoading(false);
+      // Refresh room info when fetching advances
+      fetchRoomInfo();
     }
   };
 
@@ -418,6 +542,59 @@ const Cashier = () => {
     }
   };
 
+  // Function to get room number by folio number
+  const getRoomNoByFolio = (folioNo: string) => {
+    return roomInfo[folioNo] || 'N/A';
+  };
+  
+  // Custom Date Input Component with Calendar Icon
+  const DateInput = ({ name, value, onChange, label, required }: { 
+    name: string; 
+    value: string; 
+    onChange: (e: React.ChangeEvent<HTMLInputElement>) => void; 
+    label: string; 
+    required?: boolean; 
+  }) => (
+    <div>
+      <label className="block text-xs font-medium text-gray-700 mb-1">
+        {label} {required && "*"}
+      </label>
+      <div className="relative">
+        <input
+          type="date"
+          name={name}
+          required={required}
+          value={value}
+          onChange={onChange}
+          className="w-full px-2 py-1.5 pr-8 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-xs"
+        />
+        <div className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none">
+          <svg className="w-4 h-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+          </svg>
+        </div>
+      </div>
+    </div>
+  );
+  
+  // Function to fetch room information for all check-ins
+  const fetchRoomInfo = async () => {
+    try {
+      const checkInsRes = await checkInApi.getInHouseGuests();
+      if (checkInsRes.data.success) {
+        const roomInfoMap: Record<string, string> = {};
+        checkInsRes.data.data.forEach((checkIn: CheckIn) => {
+          if (checkIn.folioNo && checkIn.roomNo) {
+            roomInfoMap[checkIn.folioNo] = checkIn.roomNo;
+          }
+        });
+        setRoomInfo(roomInfoMap);
+      }
+    } catch (error) {
+      console.error('Error fetching room info:', error);
+    }
+  };
+  
   // Function to auto-fill guest name for expenses entry based on folio number
   const autoFillGuestNameForExpenses = async (folioNo: string) => {
     if (!folioNo) {
@@ -459,8 +636,10 @@ const Cashier = () => {
     }));
   };
 
+  // Fixed handleSplitBillInputChange to handle empty string for remainingAmount
   const handleSplitBillInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value, type } = e.target;
+    
     setSplitBillData(prev => ({
       ...prev,
       [name]: type === 'number' ? Number(value) : value,
@@ -941,7 +1120,7 @@ const Cashier = () => {
       const advanceData = {
         guestName: formData.guestName,
         modeOfPaymentId: formData.modeOfPaymentId,
-        amount: formData.amount,
+        amount: Number(formData.amount),
         remarks: formData.details,
         narration: formData.narration,
         creditCardCompany: formData.creditCardCompany,
@@ -971,7 +1150,7 @@ const Cashier = () => {
         response = await advanceApi.createAdvanceForRoom(formData.roomNo, {
           guestName: formData.guestName,
           modeOfPaymentId: formData.modeOfPaymentId,
-          amount: formData.amount,
+          amount: Number(formData.amount),
           narration: formData.narration,
           date: formData.date,
         });
@@ -1013,19 +1192,39 @@ const Cashier = () => {
   // Handle updating an advance
   const handleUpdateAdvance = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editingAdvance) return;
+    if (!editingAdvance || !editingAdvance.advanceId) return;
     
     setLoading(true);
     try {
-      showNotification('Editing functionality is not fully implemented in the backend API. In a real implementation, this would update the advance.', false);
+      // Prepare the data for update
+      const updateData: Partial<Advance> = {
+        guestName: editForm.guestName,
+        modeOfPaymentId: editForm.modeOfPaymentId,
+        amount: editForm.amount,
+        remarks: editForm.details,
+        narration: editForm.narration,
+        creditCardCompany: editForm.creditCardCompany,
+        cardNumber: editForm.cardNumber,
+        onlineCompanyName: editForm.onlineCompanyName,
+        date: editForm.date,
+      };
       
-      // After successful update, refresh the view
-      setActiveTab('view');
-      setEditingAdvance(null);
-      fetchAdvances();
-      fetchSummary();
+      // Call the update API
+      const response = await advanceApi.updateAdvance(editingAdvance.advanceId, updateData);
+      
+      if (response.data.success) {
+        showNotification('Advance updated successfully!');
+        
+        // After successful update, refresh the view
+        setActiveTab('view');
+        setEditingAdvance(null);
+        fetchAdvances();
+        fetchSummary();
+      } else {
+        throw new Error(response.data.message || 'Failed to update advance');
+      }
     } catch (error: any) {
-      showNotification(`Error: ${error.response?.data?.message || 'Failed to update advance'}`, false);
+      showNotification(`Error: ${error.response?.data?.message || error.message || 'Failed to update advance'}`, false);
     } finally {
       setLoading(false);
     }
@@ -1044,13 +1243,20 @@ const Cashier = () => {
     // Set the action to perform when confirmed
     setModalAction(() => async () => {
       try {
-        showNotification('Delete functionality is not implemented in the backend API. In a real implementation, this would delete the advance.', false);
+        // Call the delete API
+        const response = await advanceApi.deleteAdvance(advanceId);
         
-        // After successful delete, refresh the view
-        fetchAdvances();
-        fetchSummary();
+        if (response.data.success) {
+          showNotification('Advance deleted successfully!');
+          
+          // After successful delete, refresh the view
+          fetchAdvances();
+          fetchSummary();
+        } else {
+          throw new Error(response.data.message || 'Failed to delete advance');
+        }
       } catch (error: any) {
-        showNotification(`Error: ${error.response?.data?.message || 'Failed to delete advance'}`, false);
+        showNotification(`Error: ${error.response?.data?.message || error.message || 'Failed to delete advance'}`, false);
       }
       setModalOpen(false);
     });
@@ -1058,24 +1264,6 @@ const Cashier = () => {
     setModalOpen(true);
   };
 
-  const handleClearForm = () => {
-    setFormData({
-      receiptNumber: `AUTO-GEN-${Math.floor(Math.random() * 9000 + 1000)}`,
-      contextValue: '',
-      date: new Date().toISOString().split('T')[0],
-      modeOfPaymentId: '',
-      amount: 0,
-      details: '',
-      narration: '',
-      guestName: '',
-      creditCardCompany: '',
-      cardNumber: '',
-      onlineCompanyName: '',
-      roomNo: '',
-    });
-    setAttemptedAutoFill(false);
-    setContextError(null);
-  };
 
   // Handle tab change
   const handleTabChange = (tab: 'record' | 'edit' | 'view' | 'reprint' | 'expenses' | 'settlement' | 'sales' | 'split') => {
@@ -1102,6 +1290,15 @@ const Cashier = () => {
     setRecordSubTab(subTab);
     // Reset form when switching sub-tabs
     handleClearForm();
+  };
+
+  // Handle view filter change
+  const handleViewFilterChange = (filter: 'all' | 'reservation' | 'bill' | 'room') => {
+    setViewFilter(filter);
+    // Clear room filter when not viewing by room
+    if (filter !== 'room') {
+      setRoomFilter('');
+    }
   };
 
   // Handle reprint bill
@@ -1726,7 +1923,7 @@ const Cashier = () => {
     }
   };
 
-  // Handle split bill
+  // Handle split bill - Fixed to handle empty remainingAmount
   const handleSplitBill = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -1737,6 +1934,9 @@ const Cashier = () => {
         return;
       }
       
+      // Convert remainingAmount to number if it's not empty, otherwise use 0
+      const remainingAmount = splitBillData.remainingAmount === '' ? 0 : Number(splitBillData.remainingAmount);
+      
       showNotification('Split bill functionality is not fully implemented in the backend API. In a real implementation, this would split the bill.', false);
       
       // Reset form
@@ -1745,7 +1945,7 @@ const Cashier = () => {
         guestName: '',
         originalAmount: 0,
         splitAmount: 0,
-        remainingAmount: 0,
+        remainingAmount: '', // Reset to empty string
       });
     } catch (error: any) {
       showNotification(`Error: ${error.response?.data?.message || 'Failed to split bill'}`, false);
@@ -1898,10 +2098,10 @@ const Cashier = () => {
                 </div>
                 
                 <form onSubmit={handleSubmit} className="p-6 space-y-6">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                     {/* Receipt Number */}
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
                         Receipt Number
                       </label>
                       <input
@@ -1909,14 +2109,14 @@ const Cashier = () => {
                         name="receiptNumber"
                         value={formData.receiptNumber}
                         disabled
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-500"
+                        className="w-full px-2 py-1.5 border border-gray-300 rounded-lg bg-gray-100 text-gray-500 text-xs"
                       />
                     </div>
                     
                     {/* Context Dropdown (for reservation and bill) or Room Number (for room) */}
                     {recordSubTab !== 'room' ? (
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                        <label className="block text-xs font-medium text-gray-700 mb-1">
                           {recordSubTab === 'reservation' ? 'Reservation Number *' : 'Bill Number *'}
                         </label>
                         <input
@@ -1925,7 +2125,7 @@ const Cashier = () => {
                           value={formData.contextValue}
                           onChange={handleInputChange}
                           placeholder={recordSubTab === 'reservation' ? "e.g., 1-25-26" : "e.g., B12345"}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                          className="w-full px-2 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-xs"
                           required
                         />
                         <p className="mt-1 text-xs text-gray-500">
@@ -1936,7 +2136,7 @@ const Cashier = () => {
                         {/* Display reservation information when available */}
                         {recordSubTab === 'reservation' && formData.guestName && !billInfo.folioNo && (
                           <div className="mt-2 p-2 bg-green-50 rounded-lg border border-green-200">
-                            <p className="text-sm text-green-800">
+                            <p className="text-xs text-green-800">
                               <span className="font-medium">Guest:</span> {formData.guestName}
                             </p>
                           </div>
@@ -1944,10 +2144,10 @@ const Cashier = () => {
                         {/* Display bill information when available */}
                         {recordSubTab === 'bill' && billInfo.folioNo && (
                           <div className="mt-2 p-2 bg-green-50 rounded-lg border border-green-200">
-                            <p className="text-sm text-green-800">
+                            <p className="text-xs text-green-800">
                               <span className="font-medium">Folio:</span> {billInfo.folioNo}
                             </p>
-                            <p className="text-sm text-green-800">
+                            <p className="text-xs text-green-800">
                               <span className="font-medium">Guest:</span> {billInfo.guestName}
                             </p>
                           </div>
@@ -1955,7 +2155,7 @@ const Cashier = () => {
                       </div>
                     ) : (
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                        <label className="block text-xs font-medium text-gray-700 mb-1">
                           Room Number *
                         </label>
                         <input
@@ -1964,16 +2164,16 @@ const Cashier = () => {
                           value={formData.roomNo}
                           onChange={handleInputChange}
                           placeholder="e.g., 101"
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                          className="w-full px-2 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-xs"
                           required
                         />
                         {/* Display folio number and guest name when available */}
                         {roomAdvanceInfo.folioNo && (
                           <div className="mt-2 p-2 bg-blue-50 rounded-lg border border-blue-200">
-                            <p className="text-sm text-blue-800">
+                            <p className="text-xs text-blue-800">
                               <span className="font-medium">Folio:</span> {roomAdvanceInfo.folioNo}
                             </p>
-                            <p className="text-sm text-blue-800">
+                            <p className="text-xs text-blue-800">
                               <span className="font-medium">Guest:</span> {roomAdvanceInfo.guestName}
                             </p>
                           </div>
@@ -1982,25 +2182,19 @@ const Cashier = () => {
                     )}
                     
                     {/* Date */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Date *
-                      </label>
-                      <input
-                        type="date"
-                        name="date"
-                        value={formData.date}
-                        onChange={handleInputChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        required
-                      />
-                    </div>
+                    <DateInput 
+                      name="date"
+                      value={formData.date}
+                      onChange={handleInputChange}
+                      label="Date *"
+                      required
+                    />
                   </div>
                   
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {/* Guest Name */}
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
                         Guest Name
                       </label>
                       <div className="relative">
@@ -2009,12 +2203,12 @@ const Cashier = () => {
                           name="guestName"
                           value={formData.guestName}
                           onChange={handleInputChange}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                          className="w-full px-2 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-xs"
                           readOnly={recordSubTab === 'room'} // Read-only for room advances
                         />
                         {autoFillLoading && (
                           <div className="absolute inset-y-0 right-0 flex items-center pr-3">
-                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-indigo-600"></div>
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
                           </div>
                         )}
                       </div>
@@ -2026,10 +2220,10 @@ const Cashier = () => {
                     </div>
                   </div>
                   
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {/* Mode of Payment */}
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
                         Mode of Payment *
                       </label>
                       <select
@@ -2037,7 +2231,7 @@ const Cashier = () => {
                         value={formData.modeOfPaymentId}
                         onChange={handleInputChange}
                         required
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        className="w-full px-2 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-xs"
                       >
                         <option value="">Select mode</option>
                         {paymentModes.map(mode => (
@@ -2049,7 +2243,7 @@ const Cashier = () => {
                     </div>
                     {/* Amount */}
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
                         Amount *
                       </label>
                       <input
@@ -2057,47 +2251,73 @@ const Cashier = () => {
                         name="amount"
                         value={formData.amount}
                         onChange={handleInputChange}
-                        min="0"
-                        step="0.01"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        placeholder="0.00"
+                        
+                        className="w-full px-2 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-xs"
+                        placeholder="150.00"
                       />
                     </div>
                   </div>
                   
                   {/* Details */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
                       Details
                     </label>
                     <textarea
                       name="details"
                       value={formData.details}
                       onChange={handleInputChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      rows={2}
+                      className="w-full px-2 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-xs"
                     />
                   </div>
                   
                   {/* Narration */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
                       Narration
                     </label>
                     <textarea
                       name="narration"
                       value={formData.narration}
                       onChange={handleInputChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      rows={2}
+                      className="w-full px-2 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-xs"
                     />
                   </div>
                   
-                  <div className="flex justify-end">
+                  <div className="flex justify-end space-x-3 pt-4">
+                    <button
+                      type="button"
+                      onClick={handleClearForm}
+                      className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 text-xs font-medium flex items-center"
+                    >
+                      <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                      </svg>
+                      Clear
+                    </button>
                     <button
                       type="submit"
-                      className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
                       disabled={loading}
+                      className="px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg hover:from-blue-700 hover:to-indigo-700 disabled:opacity-50 text-xs font-medium flex items-center shadow-md"
                     >
-                      {loading ? 'Recording...' : 'Record Advance'}
+                      {loading ? (
+                        <>
+                          <svg className="animate-spin -ml-1 mr-2 h-3 w-3 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                          Recording...
+                        </>
+                      ) : (
+                        <>
+                          <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
+                          </svg>
+                          Record Advance
+                        </>
+                      )}
                     </button>
                   </div>
                 </form>
@@ -2108,212 +2328,74 @@ const Cashier = () => {
                 <div className="p-6 border-b border-gray-200">
                   <h2 className="text-xl font-semibold text-gray-900">Edit Advance</h2>
                 </div>
-                {editingAdvance ? (
-                  <form onSubmit={handleUpdateAdvance} className="p-6 space-y-6">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      {/* Receipt Number */}
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Receipt Number
-                        </label>
-                        <input
-                          type="text"
-                          name="receiptNumber"
-                          value={editForm.receiptNumber}
-                          disabled
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-500"
-                        />
-                      </div>
-                      {/* Context Dropdown (single field) */}
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Folio / Bill / Reservation *
-                        </label>
-                        <input
-                          type="text"
-                          name="contextValue"
-                          value={editForm.contextValue}
-                          onChange={handleEditInputChange}
-                          placeholder="e.g., R12345, F67890, or B54321"
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                          required
-                          disabled
-                        />
-                        <p className="mt-1 text-xs text-gray-500">Prefix: R (Reservation), F (Folio), B (Bill)</p>
-                      </div>
-                      {/* Date */}
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Date *
-                        </label>
-                        <input
-                          type="date"
-                          name="date"
-                          value={editForm.date}
-                          onChange={handleEditInputChange}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                          required
-                        />
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {/* Guest Name */}
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Guest Name
-                        </label>
-                        <div className="relative">
-                          <input
-                            type="text"
-                            name="guestName"
-                            value={editForm.guestName}
-                            onChange={handleEditInputChange}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                          />
-                          {autoFillLoading && (
-                            <div className="absolute inset-y-0 right-0 flex items-center pr-3">
-                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-indigo-600"></div>
-                            </div>
-                          )}
-                        </div>
-                        {!autoFillLoading && attemptedAutoFill && contextError && (
-                          <p className="mt-1 text-xs text-red-500">
-                            {contextError}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {/* Mode of Payment */}
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Mode of Payment *
-                        </label>
-                        <select
-                          name="modeOfPaymentId"
-                          value={editForm.modeOfPaymentId}
-                          onChange={handleEditInputChange}
-                          required
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        >
-                          <option value="">Select mode</option>
-                          {paymentModes.map(mode => (
-                            <option key={mode.id} value={mode.id}>
-                              {mode.name}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      {/* Amount */}
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Amount *
-                        </label>
-                        <input
-                          type="number"
-                          name="amount"
-                          value={editForm.amount}
-                          onChange={handleEditInputChange}
-                          min="0"
-                          step="0.01"
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                          required
-                        />
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {/* Details */}
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Details
-                        </label>
-                        <textarea
-                          name="details"
-                          value={editForm.details}
-                          onChange={handleEditInputChange}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        />
-                      </div>
-                      {/* Narration */}
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Narration
-                        </label>
-                        <textarea
-                          name="narration"
-                          value={editForm.narration}
-                          onChange={handleEditInputChange}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        />
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      {/* Credit Card Company */}
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Credit Card Company
-                        </label>
-                        <input
-                          type="text"
-                          name="creditCardCompany"
-                          value={editForm.creditCardCompany}
-                          onChange={handleEditInputChange}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        />
-                      </div>
-                      {/* Card Number */}
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Card Number
-                        </label>
-                        <input
-                          type="text"
-                          name="cardNumber"
-                          value={editForm.cardNumber}
-                          onChange={handleEditInputChange}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        />
-                      </div>
-                      {/* Online Company Name */}
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Online Company Name
-                        </label>
-                        <input
-                          type="text"
-                          name="onlineCompanyName"
-                          value={editForm.onlineCompanyName}
-                          onChange={handleEditInputChange}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        />
-                      </div>
-                    </div>
-                    <div className="flex justify-end">
-                      <button
-                        type="submit"
-                        className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
-                      >
-                        {loading ? 'Processing...' : 'Update Advance'}
-                      </button>
-                    </div>
-                  </form>
-                ) : (
-                  <div className="text-center py-8">
-                    <p className="text-gray-500 mb-4">Select an advance to edit from the View Advances tab.</p>
-                    <button
-                      onClick={() => setActiveTab('view')}
-                      className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
-                    >
-                      View Advances
-                    </button>
-                  </div>
-                )}
               </>
             )}
             {activeTab === 'view' && (
               <>
                 <div className="p-6 border-b border-gray-200">
                   <h2 className="text-xl font-semibold text-gray-900">View Advances</h2>
+                  {/* Add sub-tabs for filtering advances */}
+                  <div className="flex rounded-lg overflow-hidden border border-gray-200 mt-4">
+                    <button
+                      type="button"
+                      onClick={() => handleViewFilterChange('all')}
+                      className={`px-4 py-2 text-sm font-medium transition-colors focus:outline-none ${
+                        viewFilter === 'all'
+                          ? 'bg-indigo-600 text-white'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                    >
+                      All Advances
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleViewFilterChange('reservation')}
+                      className={`px-4 py-2 text-sm font-medium transition-colors focus:outline-none ${
+                        viewFilter === 'reservation'
+                          ? 'bg-indigo-600 text-white'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                    >
+                      By Reservation
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleViewFilterChange('bill')}
+                      className={`px-4 py-2 text-sm font-medium transition-colors focus:outline-none ${
+                        viewFilter === 'bill'
+                          ? 'bg-indigo-600 text-white'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                    >
+                      By Bill
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleViewFilterChange('room')}
+                      className={`px-4 py-2 text-sm font-medium transition-colors focus:outline-none ${
+                        viewFilter === 'room'
+                          ? 'bg-indigo-600 text-white'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                    >
+                      By Room No
+                    </button>
+                  </div>
+                  {/* Room number filter input */}
+                  {viewFilter === 'room' && (
+                    <div className="mt-4">
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Filter by Room Number
+                      </label>
+                      <input
+                        type="text"
+                        value={roomFilter}
+                        onChange={(e) => setRoomFilter(e.target.value)}
+                        placeholder="Enter room number"
+                        className="w-full md:w-64 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                      />
+                    </div>
+                  )}
                 </div>
                 <div className="p-6">
                   {advancesLoading ? (
@@ -2329,6 +2411,7 @@ const Cashier = () => {
                             <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">Date</th>
                             <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">Guest Name</th>
                             <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">Context</th>
+                            <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">Room No</th>
                             <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">Amount</th>
                             <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">Payment Mode</th>
                             <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">Actions</th>
@@ -2345,6 +2428,9 @@ const Cashier = () => {
                                   {advance.reservationNo ? `R: ${advance.reservationNo}` : 
                                    advance.folioNo ? `F: ${advance.folioNo}` : 
                                    advance.billNo ? `B: ${advance.billNo}` : 'N/A'}
+                                </td>
+                                <td className="px-4 py-2 text-sm text-gray-700">
+                                  {advance.folioNo ? getRoomNoByFolio(advance.folioNo) : 'N/A'}
                                 </td>
                                 <td className="px-4 py-2 text-sm text-gray-700">₹{advance.amount?.toFixed(2) || '0.00'}</td>
                                 <td className="px-4 py-2 text-sm text-gray-700">
@@ -2370,7 +2456,7 @@ const Cashier = () => {
                             ))
                           ) : (
                             <tr>
-                              <td className="px-4 py-2 text-sm text-gray-700" colSpan={7}>
+                              <td className="px-4 py-2 text-sm text-gray-700" colSpan={8}>
                                 No advances found.
                               </td>
                             </tr>
@@ -2653,6 +2739,200 @@ const Cashier = () => {
                 </form>
               </>
             )}
+            {activeTab === 'edit' && (
+              <>
+                <div className="p-6 border-b border-gray-200">
+                  <h2 className="text-xl font-semibold text-gray-900">Edit Advance</h2>
+                </div>
+                <form onSubmit={handleUpdateAdvance} className="p-6 space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {/* Receipt Number */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Receipt Number
+                      </label>
+                      <input
+                        type="text"
+                        name="receiptNumber"
+                        value={editForm.receiptNumber}
+                        onChange={handleEditInputChange}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-500"
+                        readOnly
+                      />
+                    </div>
+                    
+                    {/* Context Value */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Context (Reservation/Bill/Folio)
+                      </label>
+                      <input
+                        type="text"
+                        name="contextValue"
+                        value={editForm.contextValue}
+                        onChange={handleEditInputChange}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                      />
+                    </div>
+                    
+                    {/* Date */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Date
+                      </label>
+                      <input
+                        type="date"
+                        name="date"
+                        value={editForm.date}
+                        onChange={handleEditInputChange}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Guest Name */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Guest Name
+                      </label>
+                      <input
+                        type="text"
+                        name="guestName"
+                        value={editForm.guestName}
+                        onChange={handleEditInputChange}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                      />
+                    </div>
+                    
+                    {/* Mode of Payment */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Mode of Payment
+                      </label>
+                      <select
+                        name="modeOfPaymentId"
+                        value={editForm.modeOfPaymentId}
+                        onChange={handleEditInputChange}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      >
+                        <option value="">Select mode</option>
+                        {paymentModes.map(mode => (
+                          <option key={mode.id} value={mode.id}>
+                            {mode.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Amount */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Amount
+                      </label>
+                      <input
+                        type="number"
+                        name="amount"
+                        value={editForm.amount}
+                        onChange={handleEditInputChange}
+                        min="0"
+                        step="0.01"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                    
+                    {/* Credit Card Company */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Credit Card Company
+                      </label>
+                      <input
+                        type="text"
+                        name="creditCardCompany"
+                        value={editForm.creditCardCompany}
+                        onChange={handleEditInputChange}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Card Number */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Card Number
+                      </label>
+                      <input
+                        type="text"
+                        name="cardNumber"
+                        value={editForm.cardNumber}
+                        onChange={handleEditInputChange}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                    
+                    {/* Online Company Name */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Online Company Name
+                      </label>
+                      <input
+                        type="text"
+                        name="onlineCompanyName"
+                        value={editForm.onlineCompanyName}
+                        onChange={handleEditInputChange}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      />
+                    </div>
+                  </div>
+                  
+                  {/* Details */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Details
+                    </label>
+                    <textarea
+                      name="details"
+                      value={editForm.details}
+                      onChange={handleEditInputChange}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                  
+                  {/* Narration */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Narration
+                    </label>
+                    <textarea
+                      name="narration"
+                      value={editForm.narration}
+                      onChange={handleEditInputChange}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    />
+                  </div>
+                  
+                  <div className="flex justify-end space-x-3">
+                    <button
+                      type="button"
+                      onClick={() => handleTabChange('view')}
+                      className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                      disabled={loading}
+                    >
+                      {loading ? 'Updating...' : 'Update Advance'}
+                    </button>
+                  </div>
+                </form>
+              </>
+            )}
             {activeTab === 'sales' && (
               <>
                 <div className="p-6 border-b border-gray-200">
@@ -2719,7 +2999,7 @@ const Cashier = () => {
                         name="amount"
                         value={salesData.amount}
                         onChange={handleSalesInputChange}
-                        min="0"
+                        min=""
                         step="0.01"
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         required
@@ -2861,7 +3141,7 @@ const Cashier = () => {
                         name="originalAmount"
                         value={splitBillData.originalAmount}
                         onChange={handleSplitBillInputChange}
-                        min="0"
+                        min=""
                         step="0.01"
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                         required
@@ -2885,7 +3165,7 @@ const Cashier = () => {
                     </div>
                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {/* Remaining Amount */}
+                    {/* Remaining Amount - Fixed to handle empty string */}
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
                         Remaining Amount
@@ -2898,7 +3178,7 @@ const Cashier = () => {
                         min="0"
                         step="0.01"
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        required
+                        placeholder="Optional"
                       />
                     </div>
                   </div>
