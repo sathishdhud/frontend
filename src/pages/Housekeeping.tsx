@@ -644,7 +644,12 @@ const Housekeeping: React.FC = () => {
                   className="px-2 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-transparent"
                 >
                   <option value="all">All Rooms</option>
-                  {rooms.map(room => (
+                  {[...rooms] // Create a copy to avoid mutating the original array
+                    .sort((a, b) => {
+                      // Sort by room number numerically
+                      return a.roomNo.localeCompare(b.roomNo, undefined, { numeric: true });
+                    })
+                    .map(room => (
                     <option key={room.roomId} value={room.roomId}>
                       Room {room.roomNo}
                     </option>
@@ -691,7 +696,12 @@ const Housekeeping: React.FC = () => {
                     className="w-full px-2 py-1 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-transparent"
                   >
                     <option value="">Select a room</option>
-                    {rooms.map(room => (
+                    {[...rooms] // Create a copy to avoid mutating the original array
+                      .sort((a, b) => {
+                        // Sort by room number numerically
+                        return a.roomNo.localeCompare(b.roomNo, undefined, { numeric: true });
+                      })
+                      .map(room => (
                       <option key={room.roomId} value={room.roomId}>
                         Room {room.roomNo} - {room.roomTypeName || 'Standard'}
                       </option>
@@ -806,7 +816,14 @@ const Housekeeping: React.FC = () => {
               </thead>
               <tbody className="divide-y divide-gray-200">
                 {currentTasks.length > 0 ? (
-                  currentTasks.map((task) => (
+                  [...currentTasks] // Create a copy to avoid mutating the original array
+                    .sort((a, b) => {
+                      // Sort by room number numerically
+                      const roomNoA = a.roomNo || '';
+                      const roomNoB = b.roomNo || '';
+                      return roomNoA.localeCompare(roomNoB, undefined, { numeric: true });
+                    })
+                    .map((task) => (
                     <tr key={task.taskId || `task-${task.roomId}-${task.status}-${Math.random()}`} className="hover:bg-gray-50 transition-colors">
                       <td className="px-4 py-3 whitespace-nowrap">
                         <div className="text-sm font-medium text-gray-900">
@@ -926,7 +943,12 @@ const Housekeeping: React.FC = () => {
           </div>
           
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4">
-            {rooms.map((room) => (
+            {[...rooms] // Create a copy to avoid mutating the original array
+              .sort((a, b) => {
+                // Sort by room number numerically
+                return a.roomNo.localeCompare(b.roomNo, undefined, { numeric: true });
+              })
+              .map((room) => (
               <div key={room.roomId} className="border border-gray-200 rounded-lg p-3">
                 <div className="flex items-center justify-between mb-2">
                   <h3 className="text-sm font-semibold text-gray-900">Room {room.roomNo}</h3>

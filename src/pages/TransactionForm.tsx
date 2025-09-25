@@ -149,7 +149,10 @@ const TransactionForm: React.FC = () => {
                                 className="w-full border rounded-lg px-3 py-2"
                             >
                                 <option value="">Select Room</option>
-                                {rooms.map(r => (
+                                {rooms
+                                  .slice() // Create a copy to avoid mutating the original array
+                                  .sort((a, b) => a.roomNo.localeCompare(b.roomNo, undefined, { numeric: true }))
+                                  .map(r => (
                                     <option key={r.roomId} value={r.roomId}>
                                         {r.roomNo}
                                     </option>
@@ -184,7 +187,10 @@ const TransactionForm: React.FC = () => {
                                 required
                             >
                                 <option value="">Select Account Head</option>
-                                {accountHeads.map(accountHead => (
+                                {accountHeads
+                                  .slice() // Create a copy to avoid mutating the original array
+                                  .sort((a, b) => a.name.localeCompare(b.name))
+                                  .map(accountHead => (
                                     <option key={accountHead.accHeadId} value={accountHead.accHeadId}>
                                         {accountHead.name}
                                     </option>

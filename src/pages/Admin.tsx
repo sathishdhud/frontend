@@ -990,7 +990,24 @@ const Admin: React.FC = () => {
           </thead>
           <tbody className="bg-white divide-y divide-gray-200">
             {data.length > 0 ? (
-              data.map((item, index) => (
+              [...data] // Create a copy to avoid mutating the original array
+                .sort((a, b) => {
+                  // Sort by the first column's key by default
+                  const firstColumnKey = columns[0]?.key;
+                  if (firstColumnKey) {
+                    const aValue = a[firstColumnKey];
+                    const bValue = b[firstColumnKey];
+                    if (typeof aValue === 'string' && typeof bValue === 'string') {
+                      return aValue.localeCompare(bValue, undefined, { numeric: true });
+                    } else if (typeof aValue === 'number' && typeof bValue === 'number') {
+                      return aValue - bValue;
+                    } else {
+                      return String(aValue).localeCompare(String(bValue), undefined, { numeric: true });
+                    }
+                  }
+                  return 0;
+                })
+                .map((item, index) => (
                 <tr key={index} className="hover:bg-gray-50 transition-colors duration-150">
                   {columns.map((column, colIndex) => (
                     <td key={colIndex} className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
@@ -1159,7 +1176,12 @@ const Admin: React.FC = () => {
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {users.length > 0 ? (
-                    users.map((user) => (
+                    [...users] // Create a copy to avoid mutating the original array
+                      .sort((a, b) => {
+                        // Sort by user name
+                        return a.userName.localeCompare(b.userName, undefined, { numeric: true });
+                      })
+                      .map((user) => (
                       <tr key={user.userId} className="hover:bg-gray-50 transition-colors duration-150">
                         <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
                           {user.userName}
