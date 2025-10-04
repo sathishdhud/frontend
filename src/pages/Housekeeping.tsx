@@ -240,7 +240,7 @@ const Housekeeping: React.FC = () => {
       if (response.data.success) {
         // Update room in the rooms list
         setRooms(rooms.map(room => 
-          room.roomId === roomId ? { ...room, status: status as 'VR' | 'OD' | 'OI' | 'Blocked' } : room
+          room.roomId === roomId ? { ...room, status: status as 'VR' | 'OD' | 'OI' | 'VD' } : room
         ));
         // Refresh tasks and stats
         await fetchAllData();
@@ -467,7 +467,7 @@ const Housekeeping: React.FC = () => {
       case 'VR': return 'bg-green-100 text-green-800 border-green-200';
       case 'OD': return 'bg-red-100 text-red-800 border-red-200';
       case 'OI': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
-      case 'Blocked': return 'bg-gray-100 text-gray-800 border-gray-200';
+      case 'VD': return 'bg-gray-100 text-gray-800 border-gray-200';
       default: return 'bg-gray-100 text-gray-800 border-gray-200';
     }
   };
@@ -477,7 +477,7 @@ const Housekeeping: React.FC = () => {
       case 'VR': return 'Vacant Ready';
       case 'OD': return 'Occupied Dirty';
       case 'OI': return 'Occupied In-house';
-      case 'Blocked': return 'Blocked';
+      case 'VD': return 'Vacant Dirty';
       default: return status;
     }
   };
@@ -588,7 +588,7 @@ const Housekeeping: React.FC = () => {
             <div className="bg-white p-3 rounded-lg shadow-sm border border-gray-200">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-xs font-medium text-gray-600">Blocked</p>
+                  <p className="text-xs font-medium text-gray-600">Vacant Dirty</p>
                   <p className="text-lg font-bold text-gray-600">{stats.blockedRooms}</p>
                 </div>
                 <div className="p-2 bg-gray-100 rounded-lg">
@@ -629,7 +629,7 @@ const Housekeeping: React.FC = () => {
                   <option value="VR">Vacant Ready</option>
                   <option value="OD">Occupied Dirty</option>
                   <option value="OI">Occupied In-house</option>
-                  <option value="Blocked">Blocked</option>
+                  <option value="VD">Vacant Dirty</option>
                 </select>
               </div>
               
@@ -722,7 +722,7 @@ const Housekeeping: React.FC = () => {
                     <option value="VR">Vacant Ready</option>
                     <option value="OD">Occupied Dirty</option>
                     <option value="OI">Occupied In-house</option>
-                    <option value="Blocked">Blocked</option>
+                    <option value="VD">Vacant Dirty</option>
                   </select>
                 </div>
                 
@@ -966,7 +966,7 @@ const Housekeeping: React.FC = () => {
                     <option value="VR">Vacant Ready</option>
                     <option value="OD">Occupied Dirty</option>
                     <option value="OI">Occupied In-house</option>
-                    <option value="Blocked">Blocked</option>
+                    <option value="VD">Vacant Dirty</option>
                   </select>
                 </div>
               </div>

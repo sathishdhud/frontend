@@ -29,8 +29,8 @@ import {
   SalesReceipt 
 } from '../types/api';
 
-const API_BASE_URL = 'https://backend-production-1f41.up.railway.app/api'
-//const API_BASE_URL = 'http://localhost:8080/api';
+//const API_BASE_URL = 'https://backend-production-1f41.up.railway.app/api'
+const API_BASE_URL = 'http://localhost:8080/api';
 
 // Create axios instance
 const apiClient = axios.create({
@@ -218,7 +218,44 @@ export const transactionApi = {
   getTransactionsByFolio: (folioNo: string): Promise<AxiosResponse<ApiResponse<Transaction[]>>> =>
     apiClient.get(`/transactions/folio/${folioNo}`),
   
-  // Expense Management
+  // Transaction Expenses (existing functionality)
+  createTransactionExpense: (data: {
+    voucherNo: string;
+    date: string;
+    accountHeadId: string;
+    amount: number;
+    narration?: string;
+    shiftNo: string;
+    shiftDate: string;
+    roomNo?: string;
+    billNo?: string;
+    folioNo?: string;
+    guestName?: string;
+  }): Promise<AxiosResponse<ApiResponse<Expense>>> =>
+    apiClient.post('/transactions/expenses', data),
+  
+  updateTransactionExpense: (transactionId: string, data: {
+    voucherNo: string;
+    date: string;
+    accountHeadId: string;
+    amount: number;
+    narration?: string;
+    shiftNo: string;
+    shiftDate: string;
+    roomNo?: string;
+    billNo?: string;
+    folioNo?: string;
+    guestName?: string;
+  }): Promise<AxiosResponse<ApiResponse<Expense>>> =>
+    apiClient.put(`/transactions/expenses/${transactionId}`, data),
+  
+  deleteTransactionExpense: (transactionId: string): Promise<AxiosResponse<ApiResponse<void>>> =>
+    apiClient.delete(`/transactions/expenses/${transactionId}`),
+  
+  getTransactionExpenses: (): Promise<AxiosResponse<ApiResponse<Expense[]>>> =>
+    apiClient.get('/transactions/expenses'),
+  
+  // Hotel Expense Management (new functionality)
   createExpense: (data: {
     voucherNo: string;
     date: string;
@@ -228,10 +265,45 @@ export const transactionApi = {
     shiftNo: string;
     shiftDate: string;
   }): Promise<AxiosResponse<ApiResponse<Expense>>> =>
-    apiClient.post('/transactions/expenses', data),
+    apiClient.post('/expenses', data),
+  
+  getExpenseById: (expenseId: string): Promise<AxiosResponse<ApiResponse<Expense>>> =>
+    apiClient.get(`/expenses/${expenseId}`),
+  
+  updateExpense: (expenseId: string, data: {
+    voucherNo: string;
+    date: string;
+    accountHeadId: string;
+    amount: number;
+    narration?: string;
+    shiftNo: string;
+    shiftDate: string;
+  }): Promise<AxiosResponse<ApiResponse<Expense>>> =>
+    apiClient.put(`/expenses/${expenseId}`, data),
+  
+  deleteExpense: (expenseId: string): Promise<AxiosResponse<ApiResponse<void>>> =>
+    apiClient.delete(`/expenses/${expenseId}`),
   
   getExpenses: (): Promise<AxiosResponse<ApiResponse<Expense[]>>> =>
-    apiClient.get('/transactions/expenses'),
+    apiClient.get('/expenses'),
+  
+  getExpensesByVoucher: (voucherNo: string): Promise<AxiosResponse<ApiResponse<Expense[]>>> =>
+    apiClient.get(`/expenses/voucher/${voucherNo}`),
+  
+  getExpensesByAccountHead: (accountHeadId: string): Promise<AxiosResponse<ApiResponse<Expense[]>>> =>
+    apiClient.get(`/expenses/account-head/${accountHeadId}`),
+  
+  // Create expense by bill number
+  createExpenseByBill: (billNo: string, data: {
+    voucherNo: string;
+    date: string;
+    accountHeadId: string;
+    amount: number;
+    narration?: string;
+    shiftNo: string;
+    shiftDate: string;
+  }): Promise<AxiosResponse<ApiResponse<Expense>>> =>
+    apiClient.post(`/expenses/bill/${billNo}`, data),
   
   // Sales Receipt Management
   createSalesReceipt: (data: {
@@ -248,6 +320,36 @@ export const transactionApi = {
   
   getSalesReceipts: (): Promise<AxiosResponse<ApiResponse<SalesReceipt[]>>> =>
     apiClient.get('/transactions/sales-receipts'),
+  
+  // Sales Management
+  createSalesRecord: (data: {
+    receiptNumber: string;
+    date: string;
+    modeOfPayment: string;
+    amount: number;
+    voucherNumber: string;
+    narration?: string;
+  }): Promise<AxiosResponse<ApiResponse<any>>> =>
+    apiClient.post('/sales', data),
+  
+  getSalesRecordById: (salesId: string): Promise<AxiosResponse<ApiResponse<any>>> =>
+    apiClient.get(`/sales/${salesId}`),
+  
+  updateSalesRecord: (salesId: string, data: {
+    receiptNumber: string;
+    date: string;
+    modeOfPayment: string;
+    amount: number;
+    voucherNumber: string;
+    narration?: string;
+  }): Promise<AxiosResponse<ApiResponse<any>>> =>
+    apiClient.put(`/sales/${salesId}`, data),
+  
+  deleteSalesRecord: (salesId: string): Promise<AxiosResponse<ApiResponse<void>>> =>
+    apiClient.delete(`/sales/${salesId}`),
+  
+  getAllSalesRecords: (): Promise<AxiosResponse<ApiResponse<any[]>>> =>
+    apiClient.get('/sales'),
 };
 
 // Bill APIs
@@ -280,6 +382,10 @@ export const billApi = {
   // Get bill by bill number
   getBillByBillNo: (billNo: string): Promise<AxiosResponse<ApiResponse<any>>> =>
     apiClient.get(`/bills/${billNo}`),
+  
+  // Get all transactions for a guest by bill number (new endpoint)
+  getTransactionsByGuest: (billNo: string): Promise<AxiosResponse<ApiResponse<any>>> =>
+    apiClient.get(`/bills/${billNo}/transactions-by-guest`),
 };
 
 // Reservation APIs
@@ -353,7 +459,6 @@ export const checkInApi = {
 export const advanceApi = {
   createAdvanceForReservation: (advance: Omit<Advance, 'advanceId' | 'receiptNo'>): Promise<AxiosResponse<ApiResponse<Advance>>> =>
     apiClient.post('/advances/reservation', advance),
-
   
   createAdvanceForInHouse: (advance: Omit<Advance, 'advanceId' | 'receiptNo'>): Promise<AxiosResponse<ApiResponse<Advance>>> =>
     apiClient.post('/advances/inhouse', advance),
@@ -366,8 +471,6 @@ export const advanceApi = {
   
   getAdvancesByReservation: (reservationNo: string): Promise<AxiosResponse<ApiResponse<Advance[]>>> =>
     apiClient.get(`/advances/reservation/${reservationNo}`),
-  getAllAdvances: (): Promise<AxiosResponse<ApiResponse<Advance[]>>> =>
-    apiClient.get('/advances'),
   
   getAdvancesByFolio: (folioNo: string): Promise<AxiosResponse<ApiResponse<Advance[]>>> =>
     apiClient.get(`/advances/folio/${folioNo}`),
@@ -380,13 +483,16 @@ export const advanceApi = {
   getGuestNameByReservation: (reservationNo: string): Promise<AxiosResponse<ApiResponse<string>>> =>
     apiClient.get(`/advances/reservation/${reservationNo}/guest-name`),
   
-  // Update an existing advance
-  updateAdvance: (advanceId: string, advanceData: Partial<Advance>): Promise<AxiosResponse<ApiResponse<Advance>>> =>
-    apiClient.put(`/advances/${advanceId}`, advanceData),
+  // New API endpoint to get all advances
+  getAllAdvances: (): Promise<AxiosResponse<ApiResponse<Advance[]>>> =>
+    apiClient.get('/advances'),
   
   // Delete an advance
   deleteAdvance: (advanceId: string): Promise<AxiosResponse<ApiResponse<void>>> =>
     apiClient.delete(`/advances/${advanceId}`),
+
+  updateAdvance: (advanceId: string, advanceData: Partial<Advance>): Promise<AxiosResponse<ApiResponse<Advance>>> =>
+    apiClient.put(`/advances/${advanceId}`, advanceData),
 };
 
 // Master Data APIs

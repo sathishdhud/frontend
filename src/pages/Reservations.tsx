@@ -32,6 +32,14 @@ const Reservations: React.FC = () => {
   const [itemsPerPage] = useState(8);
   const [totalReservations, setTotalReservations] = useState(0);
 
+  // Function to format date from YYYY-MM-DD to DD/MM/YYYY
+  const formatDateToDDMMYYYY = (dateString: string): string => {
+    if (!dateString) return '-';
+    const parts = dateString.split('-');
+    if (parts.length !== 3) return '-';
+    return `${parts[2]}/${parts[1]}/${parts[0]}`;
+  };
+
   const [formData, setFormData] = useState({
     guestName: "",
     companyId: "",
@@ -410,7 +418,7 @@ const Reservations: React.FC = () => {
       noOfRooms: reservation.noOfRooms || 1,
       mobileNumber: reservation.mobileNumber || "",
       emailId: reservation.emailId || "",
-      rate: reservation.rate || 0,
+      rate: reservation.rate ? reservation.rate.toString() : '',
       includingGst: (reservation.includingGst as "Y" | "N") || "N",
       remarks: reservation.remarks || "",
       idProof1: reservation.idProof1 || "",
@@ -422,7 +430,7 @@ const Reservations: React.FC = () => {
       arrivalDetails: reservation.arrivalDetails || "",
       nationalityId: reservation.nationalityId || "",
       refModeId: reservation.refModeId || "",
-      reservationSourceId: reservation.reservationSourceId || "",
+      reservationSourceId: (reservation as any).resvSourceId || reservation.reservationSourceId || "",
     });
     setIsCreating(true);
     setActiveTab("reservation");
@@ -590,38 +598,68 @@ const Reservations: React.FC = () => {
       const leftColX = margin;
       const rightColX = pageWidth / 2;
       
+      // Adjust currentY to be below the card (cardY + cardHeight + some spacing)
+      currentY = cardY + cardHeight + 10;
+      
+      // Guest Details Section
+      pdf.setFontSize(14);
+      pdf.setTextColor(40, 40, 40);
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('Guest Details', leftColX, currentY);
+      currentY += 8;
+      
+      // Draw a line under the section title
+      pdf.setDrawColor(200, 200, 200);
+      pdf.setLineWidth(0.5);
+      pdf.line(leftColX, currentY, pageWidth - margin, currentY);
+      currentY += 8;
+      
+      pdf.setFontSize(11);
       pdf.setFont('helvetica', 'bold');
       pdf.setTextColor(60, 60, 60);
-      pdf.text('Guest Name:', leftColX, currentY + 10);
-      pdf.text('Mobile:', leftColX, currentY + 20);
-      pdf.text('Email:', leftColX, currentY + 30);
+      pdf.text('Guest Name:', leftColX, currentY);
+      pdf.text('Mobile:', leftColX, currentY + 8);
+      pdf.text('Email:', leftColX, currentY + 16);
       
-      pdf.text('Arrival Date:', rightColX - 10, currentY + 10);
-      pdf.text('Departure Date:', rightColX - 10, currentY + 20);
-      pdf.text('No. of Days:', rightColX - 10, currentY + 30);
+      pdf.text('Arrival Date:', rightColX - 0, currentY);
+      pdf.text('Departure Date:', rightColX - 0, currentY + 8);
+      pdf.text('No. of Days:', rightColX - 0, currentY + 16);
       
       pdf.setFont('helvetica', 'normal');
       pdf.setTextColor(40, 40, 40);
-      pdf.text(reservation.guestName || 'N/A', leftColX + 30, currentY + 10);
-      pdf.text(reservation.mobileNumber || 'N/A', leftColX + 30, currentY + 20);
-      pdf.text(reservation.emailId || 'N/A', leftColX + 30, currentY + 30);
+      pdf.text(reservation.guestName || 'N/A', leftColX + 30, currentY);
+      pdf.text(reservation.mobileNumber || 'N/A', leftColX + 30, currentY + 8);
+      pdf.text(reservation.emailId || 'N/A', leftColX + 30, currentY + 16);
       
-      pdf.text(reservation.arrivalDate || 'N/A', rightColX + 35, currentY + 10);
-      pdf.text(reservation.departureDate || 'N/A', rightColX + 35, currentY + 20);
-      pdf.text(reservation.noOfDays?.toString() || 'N/A', rightColX + 35, currentY + 30);
+      pdf.text(reservation.arrivalDate || 'N/A', rightColX + 35, currentY);
+      pdf.text(reservation.departureDate || 'N/A', rightColX + 35, currentY + 8);
+      pdf.text(reservation.noOfDays?.toString() || 'N/A', rightColX + 35, currentY + 16);
       
-      currentY += 55;
+      currentY += 24;
       
-      // Room and plan details
+      // Room Details Section
+      pdf.setFontSize(14);
+      pdf.setTextColor(40, 40, 40);
+      pdf.setFont('helvetica', 'bold');
+      pdf.text('Room Details', leftColX, currentY);
+      currentY += 8;
+      
+      // Draw a line under the section title
+      pdf.setDrawColor(200, 200, 200);
+      pdf.setLineWidth(0.5);
+      pdf.line(leftColX, currentY, pageWidth - margin, currentY);
+      currentY += 8;
+      
+      pdf.setFontSize(11);
       pdf.setFont('helvetica', 'bold');
       pdf.setTextColor(60, 60, 60);
       pdf.text('Room Type:', leftColX, currentY);
-      pdf.text('Plan Type:', leftColX, currentY + 10);
-      pdf.text('No. of Rooms:', leftColX, currentY + 20);
-      pdf.text('No. of Persons:', leftColX, currentY + 30);
+      pdf.text('Plan Type:', leftColX, currentY + 8);
+      pdf.text('No. of Rooms:', leftColX, currentY + 16);
+      pdf.text('No. of Persons:', leftColX, currentY + 24);
       
       pdf.text('Rate (per night):', rightColX - 10, currentY);
-      pdf.text('GST Included:', rightColX - 10, currentY + 10);
+      pdf.text('GST Included:', rightColX - 10, currentY + 8);
       
       pdf.setFont('helvetica', 'normal');
       pdf.setTextColor(40, 40, 40);
@@ -632,79 +670,93 @@ const Reservations: React.FC = () => {
       
       // Find plan type name
       const planType = planTypes.find(pt => pt.planId === reservation.planId);
-      pdf.text(planType?.planName || reservation.planId || 'N/A', leftColX + 30, currentY + 10);
+      pdf.text(planType?.planName || reservation.planId || 'N/A', leftColX + 30, currentY + 8);
       
-      pdf.text(reservation.noOfRooms?.toString() || 'N/A', leftColX + 30, currentY + 20);
-      pdf.text(reservation.noOfPersons?.toString() || 'N/A', leftColX + 30, currentY + 30);
+      pdf.text(reservation.noOfRooms?.toString() || 'N/A', leftColX + 30, currentY + 16);
+      pdf.text(reservation.noOfPersons?.toString() || 'N/A', leftColX + 30, currentY + 24);
       
       pdf.text(`₹${reservation.rate?.toFixed(2) || '0.00'}`, rightColX + 35, currentY);
-      pdf.text(reservation.includingGst === 'Y' ? 'Yes' : 'No', rightColX + 35, currentY + 10);
+      pdf.text(reservation.includingGst === 'Y' ? 'Yes' : 'No', rightColX + 35, currentY + 8);
       
-      currentY += 55;
+      currentY += 32;
       
       // Additional details if available
       if (reservation.companyId || reservation.nationalityId || reservation.remarks || reservation.idProof1 || reservation.idProof2 || reservation.idProof3) {
-        pdf.setFontSize(16);
+        // Additional Details Section
+        pdf.setFontSize(14);
         pdf.setTextColor(40, 40, 40);
         pdf.setFont('helvetica', 'bold');
-        pdf.text('Additional Details', margin, currentY);
-        currentY += 12;
+        pdf.text('Additional Details', leftColX, currentY);
+        currentY += 8;
+        
+        // Draw a line under the section title
+        pdf.setDrawColor(200, 200, 200);
+        pdf.setLineWidth(0.5);
+        pdf.line(leftColX, currentY, pageWidth - margin, currentY);
+        currentY += 8;
         
         pdf.setFontSize(11);
         pdf.setFont('helvetica', 'bold');
         pdf.setTextColor(60, 60, 60);
         
         let detailY = currentY;
+        let rightColY = currentY;
         
+        // Left column details
         if (reservation.companyId) {
           const company = companies.find(c => c.companyId === reservation.companyId);
           pdf.text('Company:', leftColX, detailY);
           pdf.setFont('helvetica', 'normal');
           pdf.text(company?.companyName || reservation.companyId || 'N/A', leftColX + 25, detailY);
-          detailY += 10;
+          detailY += 8;
+          pdf.setFont('helvetica', 'bold');
         }
         
         if (reservation.nationalityId) {
           const nationality = nationalities.find(n => n.id === reservation.nationalityId);
-          pdf.setFont('helvetica', 'bold');
           pdf.text('Nationality:', leftColX, detailY);
           pdf.setFont('helvetica', 'normal');
           pdf.text(nationality?.nationality || reservation.nationalityId || 'N/A', leftColX + 25, detailY);
-          detailY += 10;
+          detailY += 8;
+          pdf.setFont('helvetica', 'bold');
         }
         
+        // Right column details
         if (reservation.idProof1) {
-          pdf.setFont('helvetica', 'bold');
-          pdf.text('ID Proof 1:', leftColX, detailY);
+          pdf.text('ID Proof 1:', rightColX - 10, rightColY);
           pdf.setFont('helvetica', 'normal');
-          pdf.text(reservation.idProof1, leftColX + 25, detailY);
-          detailY += 10;
+          pdf.text(reservation.idProof1, rightColX + 25, rightColY);
+          rightColY += 8;
+          pdf.setFont('helvetica', 'bold');
         }
         
         if (reservation.idProof2) {
-          pdf.setFont('helvetica', 'bold');
-          pdf.text('ID Proof 2:', leftColX, detailY);
+          pdf.text('ID Proof 2:', rightColX - 10, rightColY);
           pdf.setFont('helvetica', 'normal');
-          pdf.text(reservation.idProof2, leftColX + 25, detailY);
-          detailY += 10;
+          pdf.text(reservation.idProof2, rightColX + 25, rightColY);
+          rightColY += 8;
+          pdf.setFont('helvetica', 'bold');
         }
         
         if (reservation.idProof3) {
-          pdf.setFont('helvetica', 'bold');
-          pdf.text('ID Proof 3:', leftColX, detailY);
+          pdf.text('ID Proof 3:', rightColX - 10, rightColY);
           pdf.setFont('helvetica', 'normal');
-          pdf.text(reservation.idProof3, leftColX + 25, detailY);
-          detailY += 10;
+          pdf.text(reservation.idProof3, rightColX + 25, rightColY);
+          rightColY += 8;
+          pdf.setFont('helvetica', 'bold');
         }
         
+        // Remarks (full width)
         if (reservation.remarks) {
-          pdf.setFont('helvetica', 'bold');
-          pdf.text('Remarks:', leftColX, detailY);
+          const remarksY = Math.max(detailY, rightColY) + 5;
+          pdf.text('Remarks:', leftColX, remarksY);
           pdf.setFont('helvetica', 'normal');
-          pdf.text(reservation.remarks, leftColX + 25, detailY);
+          // Split long remarks into multiple lines
+          const splitRemarks = pdf.splitTextToSize(reservation.remarks, pageWidth - 2 * margin - 30);
+          pdf.text(splitRemarks, leftColX + 30, remarksY);
         }
         
-        currentY = detailY + 20;
+        currentY = Math.max(detailY, rightColY) + 20;
       }
       
       // Add footer with modern styling
@@ -1174,8 +1226,6 @@ const Reservations: React.FC = () => {
                     <input
                       type="number"
                       name="rate"
-                     
-                      
                       value={formData.rate}
                       onChange={handleInputChange}
                       onKeyDown={(e) => handleKeyDown(e, "includingGst")}
@@ -1596,10 +1646,10 @@ const Reservations: React.FC = () => {
                           {reservation.planName || reservation.planId || "-"}
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                          {reservation.arrivalDate}
+                          {reservation.arrivalDate ? formatDateToDDMMYYYY(reservation.arrivalDate) : '-'}
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 hidden md:table-cell">
-                          {reservation.departureDate}
+                          {reservation.departureDate ? formatDateToDDMMYYYY(reservation.departureDate) : '-'}
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                           {reservation.noOfPersons}/{reservation.noOfRooms}
@@ -1779,10 +1829,10 @@ const Reservations: React.FC = () => {
                                 {reservation.planName || reservation.planId || "-"}
                               </td>
                               <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
-                                {reservation.arrivalDate}
+                                {reservation.arrivalDate ? formatDateToDDMMYYYY(reservation.arrivalDate) : '-'}
                               </td>
                               <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 hidden md:table-cell">
-                                {reservation.departureDate}
+                                {reservation.departureDate ? formatDateToDDMMYYYY(reservation.departureDate) : '-'}
                               </td>
                               <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                                 {reservation.noOfPersons}/{reservation.noOfRooms}

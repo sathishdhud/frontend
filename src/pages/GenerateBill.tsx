@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
 import Layout from '../components/Layout/Layout';
-import { Advance, CheckIn, PaymentMode, Room, Reservation } from '../types/api';
+import { Advance, CheckIn, PaymentMode, Room, Reservation, Expense } from '../types/api';
 import { advanceApi, masterDataApi, checkInApi, transactionApi, billApi, roomApi, reservationApi } from '../services/api';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
@@ -29,6 +29,7 @@ const BillGeneration: React.FC = () => {
   const [billData, setBillData] = useState<any>(null);
   const [billTransactions, setBillTransactions] = useState<any[]>([]);
   const [billAdvances, setBillAdvances] = useState<any[]>([]);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
   const [relatedBills, setRelatedBills] = useState<any[]>([]);
   const [reservationData, setReservationData] = useState<Reservation | null>(null);
   
@@ -161,6 +162,38 @@ const BillGeneration: React.FC = () => {
       }
     } catch (error) {
       console.error(`Error fetching advances for reservation ${reservationNo}:`, error);
+      return [];
+    }
+  };
+
+  // Function to fetch expenses by folio number
+  const fetchExpensesByFolio = async (folioNo: string): Promise<Expense[]> => {
+    // Validate folioNo parameter
+    if (!folioNo) {
+      console.warn('folioNo is undefined or empty');
+      return [];
+    }
+    
+    try {
+      console.log(`Fetching expenses for folio: ${folioNo}`);
+      
+      // Get all expenses
+      const response = await transactionApi.getExpenses();
+      console.log('All expenses response:', response);
+      
+      if (response.data.success && response.data.data) {
+        // Filter expenses by folio number in narration
+        const filteredExpenses = response.data.data.filter((expense: Expense) => 
+          expense.narration && expense.narration.includes(folioNo)
+        );
+        console.log(`Found ${filteredExpenses.length} expenses for folio ${folioNo}`);
+        return filteredExpenses;
+      } else {
+        console.warn(`No expenses found or API returned unsuccessful response`);
+        return [];
+      }
+    } catch (error) {
+      console.error(`Error fetching expenses for folio ${folioNo}:`, error);
       return [];
     }
   };
@@ -638,6 +671,10 @@ const BillGeneration: React.FC = () => {
           }
         }
         
+        // Fetch expenses for this folio
+        const expensesData = await fetchExpensesByFolio(folioNo);
+        setExpenses(expensesData);
+        
         // Calculate advances and transactions
         const advanceAmount = billAdvancesData.reduce((sum, advance) => {
           console.log(`Adding advance amount: ${advance.amount}, receipt: ${advance.receiptNo}`);
@@ -650,8 +687,11 @@ const BillGeneration: React.FC = () => {
           .filter((transaction: any) => transaction.accHeadId !== 'ROOM_CHARGES') // Exclude room charges
           .reduce((sum: number, transaction: any) => sum + (transaction.amount || 0), 0);
         
-        // Calculate subtotal (room charges + additional charges)
-        const subtotal = roomCharges + additionalCharges;
+        // Calculate expense charges from expenses
+        const expenseCharges = expensesData.reduce((sum: number, expense: Expense) => sum + (expense.amount || 0), 0);
+        
+        // Calculate subtotal (room charges + additional charges + expense charges)
+        const subtotal = roomCharges + additionalCharges + expenseCharges;
         
         // Calculate balance (subtotal - advance paid - paid amount)
         const balanceAmount = Math.max(0, subtotal - advanceAmount - paidAmount);
@@ -671,6 +711,7 @@ const BillGeneration: React.FC = () => {
           checkOutDate: billData.checkOutDate ? new Date(billData.checkOutDate).toLocaleDateString() : new Date().toLocaleDateString(),
           roomCharges: roomCharges,
           additionalCharges: additionalCharges,
+          expenseCharges: expenseCharges, // Add expense charges to bill data
           subtotal: subtotal,
           advanceAmount: advanceAmount,
           balanceAmount: balanceAmount,
@@ -792,7 +833,10 @@ const BillGeneration: React.FC = () => {
         });
         
         if (response.data.success) {
-          alert('Bill updated successfully!');
+          // After successful bill update, checkout the guest and update room status
+          await handleCheckoutAndRoomStatusUpdate();
+          
+          alert('Bill updated successfully! Guest has been checked out and room status updated.');
         } else {
           alert(`Failed to update bill: ${response.data.message}`);
         }
@@ -996,6 +1040,29 @@ const BillGeneration: React.FC = () => {
         });
       }
       
+      // Add expense charges
+      if (expenses.length > 0) {
+        expenses.forEach((expense: Expense, index: number) => {
+          const itemName = expense.narration || 'Expense';
+          
+          // Alternating row colors
+          if (index % 2 === 0) {
+            pdf.setFillColor(250, 250, 250);
+            pdf.rect(tableStartX, currentY, tableWidth, rowHeight, 'F');
+          }
+          
+          pdf.text(itemName, tableStartX + 5, currentY + 7);
+          pdf.text(`₹${expense.amount?.toFixed(2) || '0.00'}`, tableStartX + tableWidth - 5, currentY + 7, { align: 'right' });
+          currentY += rowHeight;
+          
+          // Check if we need a new page
+          if (currentY > pageHeight - 80) {
+            pdf.addPage();
+            currentY = margin;
+          }
+        });
+      }
+      
       // Add separator line
       pdf.setDrawColor(200, 200, 200);
       pdf.setLineWidth(0.2);
@@ -1157,6 +1224,12 @@ const BillGeneration: React.FC = () => {
       // Save the PDF
       const fileName = `Bill_${billData.billNo || 'unknown'}_${new Date().toISOString().slice(0, 10)}.pdf`;
       pdf.save(fileName);
+      
+      // After downloading the PDF, checkout the guest and update room status
+      if (activeTab !== 'reservation') {
+        await handleCheckoutAndRoomStatusUpdate();
+        console.log('Checkout process completed after PDF download');
+      }
     } catch (error) {
       console.error('Error generating PDF:', error);
       alert('Failed to generate PDF. Please try again.');
@@ -1367,7 +1440,10 @@ const BillGeneration: React.FC = () => {
         });
         
         if (response.data.success) {
-          alert('Payment submitted successfully!');
+          // After successful payment, checkout the guest and update room status
+          await handleCheckoutAndRoomStatusUpdate();
+          
+          alert('Payment submitted successfully! Guest has been checked out and room status updated.');
           // Refresh the bill data to show updated payment information
           await generateBillByFolio(billData.folioNo);
           setShowPaymentForm(false);
@@ -1386,6 +1462,37 @@ const BillGeneration: React.FC = () => {
       });
     } finally {
       setPaymentLoading(false);
+    }
+  };
+
+  // Function to handle checkout and room status update
+  const handleCheckoutAndRoomStatusUpdate = async () => {
+    if (!billData) return;
+    
+    try {
+      // Find the check-in record for this folio
+      const checkInResponse = await checkInApi.getCheckInByFolio(billData.folioNo);
+      
+      if (checkInResponse.data.success && checkInResponse.data.data) {
+        const checkInData = checkInResponse.data.data;
+        
+        // Update room status to "VD" (Vacant Dirty) 
+        if (checkInData.roomId) {
+          await roomApi.updateRoomStatus(checkInData.roomId, 'VD');
+          console.log('Room status updated to VD (Vacant Dirty)');
+        }
+        
+        // Update the check-in record with checkout date
+        const checkoutDate = new Date().toISOString();
+        await checkInApi.updateCheckIn(billData.folioNo, {
+          departureDate: checkoutDate
+        });
+        console.log('Check-in record updated with checkout date');
+      }
+    } catch (error) {
+      console.error('Error during checkout process:', error);
+      // We don't throw the error to avoid interrupting the payment process
+      // but we log it for debugging purposes
     }
   };
 
@@ -1677,7 +1784,7 @@ const BillGeneration: React.FC = () => {
               {/* Transaction Details */}
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 mb-6">
                 <h4 className="text-lg font-semibold text-gray-900 mb-3">Additional Charges Details</h4>
-                {billTransactions.length > 0 ? (
+                {billTransactions.length > 0 || expenses.length > 0 ? (
                   <div className="overflow-x-auto">
                     <table className="min-w-full divide-y divide-gray-200">
                       <thead className="bg-gray-50">
@@ -1689,21 +1796,34 @@ const BillGeneration: React.FC = () => {
                         </tr>
                       </thead>
                       <tbody className="bg-white divide-y divide-gray-200">
+                        {/* Render regular transactions */}
                         {billTransactions.map((transaction: any, index: number) => (
-                          <tr key={index}>
+                          <tr key={`transaction-${index}`}>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{transaction.date || 'N/A'}</td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{transaction.accHeadName || transaction.accHeadId || 'N/A'}</td>
                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">₹{transaction.amount?.toFixed(2) || '0.00'}</td>
                             <td className="px-6 py-4 text-sm text-gray-900">{transaction.narration || '-'}</td>
                           </tr>
                         ))}
+                        
+                        {/* Render expenses */}
+                        {expenses.map((expense: Expense, index: number) => (
+                          <tr key={`expense-${index}`} className="bg-blue-50">
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">{expense.date ? new Date(expense.date).toLocaleDateString() : 'N/A'}</td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">Expense</td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">₹{expense.amount?.toFixed(2) || '0.00'}</td>
+                            <td className="px-6 py-4 text-sm text-gray-900">{expense.narration || '-'}</td>
+                          </tr>
+                        ))}
+                        
                         <tr className="bg-gray-50 font-semibold">
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900" colSpan={3}>Additional Charges</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900" colSpan={2}>Total Additional Charges</td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                            ₹{billTransactions
+                            ₹{(billTransactions
                               .filter((transaction: any) => transaction.accHeadId !== 'ROOM_CHARGES')
-                              .reduce((sum: number, transaction: any) => sum + (transaction.amount || 0), 0)
-                              .toFixed(2)}
+                              .reduce((sum: number, transaction: any) => sum + (transaction.amount || 0), 0) + 
+                              expenses.reduce((sum: number, expense: Expense) => sum + (expense.amount || 0), 0)
+                            ).toFixed(2)}
                           </td>
                           <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900"></td>
                         </tr>
@@ -1774,6 +1894,10 @@ const BillGeneration: React.FC = () => {
                       <tr>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">Additional Charges</td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">₹{billData.additionalCharges?.toFixed(2) || '0.00'}</td>
+                      </tr>
+                      <tr>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">Expense Charges</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">₹{billData.expenseCharges?.toFixed(2) || '0.00'}</td>
                       </tr>
                       <tr>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">Subtotal</td>
@@ -2015,8 +2139,11 @@ const RelatedBillRow: React.FC<{ bill: any }> = ({ bill }) => {
     .filter((transaction: any) => transaction.accHeadId !== 'ROOM_CHARGES')
     .reduce((sum: number, transaction: any) => sum + (transaction.amount || 0), 0);
   
+  // Calculate expense charges (assuming expenses data is available in the bill object)
+  const expenseCharges = bill.expenseCharges || 0;
+  
   // Calculate subtotal
-  const subtotal = finalRoomCharges + totalTransactions;
+  const subtotal = finalRoomCharges + totalTransactions + expenseCharges;
   
   // Use advance amount directly from bill data
   const advanceAmount = bill.advanceAmount || 0;

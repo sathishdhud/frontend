@@ -28,38 +28,20 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [isLoading, setIsLoading] = useState(true);
   const [loginTime, setLoginTime] = useState<number | null>(null);
 
-  // Token expiration time (30 minutes in milliseconds)
-  const TOKEN_EXPIRATION_TIME = 30 * 60 * 1000;
-
+  // Remove automatic session timeout
+  // Users will stay logged in until they explicitly click logout
+  
   useEffect(() => {
     const token = localStorage.getItem('token');
     const userData = localStorage.getItem('user');
     const loginTimestamp = localStorage.getItem('loginTime');
     
-    if (token && userData && loginTimestamp) {
+    if (token && userData) {
       try {
         const parsedUser = JSON.parse(userData);
-        const timestamp = parseInt(loginTimestamp);
+        setUser(parsedUser);
         
-        // Check if token is still valid
-        const currentTime = Date.now();
-        const timeElapsed = currentTime - timestamp;
-        
-        if (timeElapsed < TOKEN_EXPIRATION_TIME) {
-          setUser(parsedUser);
-          setLoginTime(timestamp);
-          
-          // Set up automatic logout when token expires
-          const timeLeft = TOKEN_EXPIRATION_TIME - timeElapsed;
-          setTimeout(() => {
-            logout();
-          }, timeLeft);
-        } else {
-          // Token has expired, clear storage
-          localStorage.removeItem('token');
-          localStorage.removeItem('user');
-          localStorage.removeItem('loginTime');
-        }
+        // Don't set up automatic logout - user stays logged in until explicit logout
       } catch (error) {
         localStorage.removeItem('token');
         localStorage.removeItem('user');
@@ -69,19 +51,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setIsLoading(false);
   }, []);
 
-  // Handle tab closing
-  useEffect(() => {
-    const handleBeforeUnload = () => {
-      // Logout when tab is closed
-      logout();
-    };
-
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    
-    return () => {
-      window.removeEventListener('beforeunload', handleBeforeUnload);
-    };
-  }, []);
+  // Removed automatic logout on tab closing
+  // Users will stay logged in until they explicitly click the logout button
 
   const login = async (userName: string, password: string): Promise<User | boolean> => {
     try {
@@ -98,10 +69,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         setUser(userData);
         setLoginTime(currentTime);
         
-        // Set up automatic logout after 30 minutes
-        setTimeout(() => {
-          logout();
-        }, TOKEN_EXPIRATION_TIME);
+        // Removed automatic logout - user will stay logged in until explicit logout
         
         // Send successful login notification to Telegram
         authApi.sendLoginNotification(userName);

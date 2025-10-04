@@ -17,6 +17,8 @@ import { Room, RoomStats, RoomType, Company, PlanType, SettlementType, ArrivalMo
 import { roomApi, reservationApi, checkInApi, masterDataApi, operationsApi, billApi } from '../services/api';
 import Layout from '../components/Layout/Layout';
 import Modal from '../components/Modal';
+import RoomBillDetails from '../components/RoomBillDetails';
+
 
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
@@ -118,6 +120,10 @@ const Dashboard: React.FC = () => {
   
   // Add state for tabs
   const [activeCheckInTab, setActiveCheckInTab] = useState<'basic' | 'additional'>('basic');
+
+  // Add state for bill details modal
+  const [showBillDetails, setShowBillDetails] = useState(false);
+  const [selectedRoomForBill, setSelectedRoomForBill] = useState<Room | null>(null);
 
   const handleViewDetails = async (roomId: string) => {
     setDetailsOpen(true);
@@ -224,7 +230,7 @@ const Dashboard: React.FC = () => {
                     arrivalDetails: reservation.arrivalDetails || guest.arrivalDetails || '',
                     nationalityId: reservation.nationalityId || guest.nationalityId || '',
                     refModeId: reservation.refModeId || guest.refModeId || '',
-                    resvSourceId: reservation.reservationSourceId || guest.resvSourceId || '',
+                    resvSourceId: (reservation as any).resvSourceId || reservation.reservationSourceId || guest.resvSourceId || '',
                     walkIn: guest.walkIn || 'N',
                   }));
                   return;
@@ -469,7 +475,7 @@ const Dashboard: React.FC = () => {
             arrivalDetails: reservation.arrivalDetails || '',
             nationalityId: reservation.nationalityId || '',
             refModeId: reservation.refModeId || '',
-            resvSourceId: reservation.reservationSourceId || '',
+            resvSourceId: (reservation as any).resvSourceId || reservation.reservationSourceId || ''
           }));
         } else {
           setReservationInfo(null);
@@ -622,7 +628,7 @@ const Dashboard: React.FC = () => {
       case 'VR': return 'bg-green-100 text-green-800 border border-green-200';
       case 'OD': return 'bg-blue-100 text-blue-800 border border-blue-200';
       case 'OI': return 'bg-blue-100 text-blue-800 border border-blue-200';
-      case 'Blocked': return 'bg-red-100 text-red-800 border border-red-200';
+      case 'VD': return 'bg-yellow-100 text-yellow-800 border border-yellow-200'; // Vacant Dirty
       default: return 'bg-gray-100 text-gray-800 border border-gray-200';
     }
   };
@@ -632,7 +638,7 @@ const Dashboard: React.FC = () => {
       case 'VR': return 'Vacant';
       case 'OD': return 'Occupied';
       case 'OI': return 'Occupied';
-      case 'Blocked': return 'Blocked';
+      case 'VD': return 'Vacant Dirty';
       default: return status;
     }
   };
@@ -642,7 +648,7 @@ const Dashboard: React.FC = () => {
       case 'VR': return <KeyIcon className="w-4 h-4" />;
       case 'OD': return <UserGroupIcon className="w-4 h-4" />;
       case 'OI': return <UserGroupIcon className="w-4 h-4" />;
-      case 'Blocked': return <ExclamationTriangleIcon className="w-4 h-4" />;
+      case 'VD': return <ExclamationTriangleIcon className="w-4 h-4" />;
       default: return <HomeIcon className="w-4 h-4" />;
     }
   };
@@ -663,21 +669,9 @@ const Dashboard: React.FC = () => {
     setSelectedRoomType('');
   };
 
-  const handleViewBill = async (roomId: string) => {
-    try {
-      // First get room details to get folio number
-      const roomResponse = await roomApi.getRoomById(roomId);
-      if (roomResponse.data.success && roomResponse.data.data.folioNo) {
-        const folioNo = roomResponse.data.data.folioNo;
-        // Navigate to the GenerateBill page with folio number
-        navigate(`/generate-bill?folioNo=${folioNo}`);
-      } else {
-        setDetailsError('No bill found for this room');
-      }
-    } catch (error) {
-      console.error('Failed to fetch bill:', error);
-      setDetailsError('Failed to fetch bill details');
-    }
+  const handleViewBill = (room: Room) => {
+    setSelectedRoomForBill(room);
+    setShowBillDetails(true);
   };
 
   const handleRoomShift = async (room: Room) => {
@@ -998,6 +992,7 @@ const Dashboard: React.FC = () => {
               className={`rounded-xl shadow-md border-2 overflow-hidden cursor-pointer transition-all duration-200 hover:shadow-lg hover:-translate-y-1 flex flex-col ${
                 room.status === 'VR' ? 'bg-green-100 border-green-300 hover:border-green-500' : 
                 room.status === 'OD' || room.status === 'OI' ? 'bg-red-100 border-red-300 hover:border-red-500' : 
+                room.status === 'VD' ? 'bg-yellow-100 border-yellow-300 hover:border-yellow-500' : // Vacant Dirty status
                 'bg-gray-100 border-gray-300 hover:border-gray-500'
               }`}
               onClick={() => handleRoomClick(room)}
@@ -1006,6 +1001,7 @@ const Dashboard: React.FC = () => {
                 <div className={`text-2xl font-bold mb-2 ${
                   room.status === 'VR' ? 'text-green-800' : 
                   room.status === 'OD' || room.status === 'OI' ? 'text-red-800' : 
+                  room.status === 'VD' ? 'text-yellow-800' : // Vacant Dirty status
                   'text-gray-800'
                 }`}>
                   {room.roomNo}
@@ -1013,6 +1009,7 @@ const Dashboard: React.FC = () => {
                 <div className={`text-sm mb-2 ${
                   room.status === 'VR' ? 'text-green-700' : 
                   room.status === 'OD' || room.status === 'OI' ? 'text-red-700' : 
+                  room.status === 'VD' ? 'text-yellow-700' : // Vacant Dirty status
                   'text-gray-700'
                 }`}>
                   Floor: {room.floor}
@@ -1021,6 +1018,7 @@ const Dashboard: React.FC = () => {
                   <div className={`text-sm mb-2 ${
                     room.status === 'VR' ? 'text-green-700' : 
                     room.status === 'OD' || room.status === 'OI' ? 'text-red-700' : 
+                    room.status === 'VD' ? 'text-yellow-700' : // Vacant Dirty status
                     'text-gray-700'
                   }`}>
                     Type: {room.roomTypeName}
@@ -1029,6 +1027,7 @@ const Dashboard: React.FC = () => {
                 <span className={`inline-flex items-center space-x-1 px-3 py-1 rounded-full text-sm font-medium ${
                   room.status === 'VR' ? 'bg-green-200 text-green-900' :
                   room.status === 'OD' || room.status === 'OI' ? 'bg-red-200 text-red-900' :
+                  room.status === 'VD' ? 'bg-yellow-200 text-yellow-900' : // Vacant Dirty status
                   'bg-gray-200 text-gray-900'
                 }`}>
                   {getStatusIcon(room.status)}
@@ -1038,6 +1037,7 @@ const Dashboard: React.FC = () => {
               <div className={`px-4 py-2 border-t flex justify-between ${
                 room.status === 'VR' ? 'bg-green-50 border-green-200' : 
                 room.status === 'OD' || room.status === 'OI' ? 'bg-red-50 border-red-200' : 
+                room.status === 'VD' ? 'bg-yellow-50 border-yellow-200' : // Vacant Dirty status
                 'bg-gray-50 border-gray-200'
               }`}>
                 <button
@@ -1048,18 +1048,19 @@ const Dashboard: React.FC = () => {
                   className={`text-xs flex items-center ${
                     room.status === 'VR' ? 'text-green-700 hover:text-green-900' : 
                     room.status === 'OD' || room.status === 'OI' ? 'text-red-700 hover:text-red-900' : 
+                    room.status === 'VD' ? 'text-yellow-700 hover:text-yellow-900' : // Vacant Dirty status
                     'text-gray-700 hover:text-gray-900'
                   }`}
                 >
                   <EyeIcon className="w-3 h-3 mr-1" />
                   Details
                 </button>
-                {room.status === 'OD' || room.status === 'OI' ? (
+                {(room.status === 'OD' || room.status === 'OI') ? (
                   <>
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        handleViewBill(room.roomId);
+                        handleViewBill(room);
                       }}
                       className="text-xs flex items-center text-red-700 hover:text-red-900"
                     >
@@ -1078,20 +1079,38 @@ const Dashboard: React.FC = () => {
                     </button>
                   </>
                 ) : (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      alert('Room shifting is only available for occupied rooms.');
-                    }}
-                    className={`text-xs flex items-center cursor-not-allowed ${
-                      room.status === 'VR' ? 'text-green-500' : 
-                      'text-gray-500'
-                    }`}
-                    disabled
-                  >
-                    <ArrowsRightLeftIcon className="w-3 h-3 mr-1" />
-                    Shift
-                  </button>
+                  <>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        alert('Billing is only available for occupied rooms.');
+                      }}
+                      className={`text-xs flex items-center cursor-not-allowed ${
+                        room.status === 'VR' ? 'text-green-500' : 
+                        room.status === 'VD' ? 'text-yellow-500' : // Vacant Dirty status
+                        'text-gray-500'
+                      }`}
+                      disabled
+                    >
+                      <CurrencyRupeeIcon className="w-3 h-3 mr-1" />
+                      Bill
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        alert('Room shifting is only available for occupied rooms.');
+                      }}
+                      className={`text-xs flex items-center cursor-not-allowed ${
+                        room.status === 'VR' ? 'text-green-500' : 
+                        room.status === 'VD' ? 'text-yellow-500' : // Vacant Dirty status
+                        'text-gray-500'
+                      }`}
+                      disabled
+                    >
+                      <ArrowsRightLeftIcon className="w-3 h-3 mr-1" />
+                      Shift
+                    </button>
+                  </>
                 )}
               </div>
             </div>
@@ -1112,7 +1131,7 @@ const Dashboard: React.FC = () => {
                 </svg>
               </button>
             </div>
-            
+                        
             <form onSubmit={handleCheckInSubmit}>
               {/* Tabs */}
               <div className="border-b border-gray-200 mb-6">
@@ -1634,6 +1653,18 @@ const Dashboard: React.FC = () => {
           </div>
         </div>
       )}
+      {/* Bill Details Modal */}
+      {showBillDetails && selectedRoomForBill && (
+        <RoomBillDetails
+          roomId={selectedRoomForBill.roomId}
+          roomNo={selectedRoomForBill.roomNo}
+          onClose={() => {
+            setShowBillDetails(false);
+            setSelectedRoomForBill(null);
+          }}
+        />
+      )}
+      
       <Modal
         isOpen={modalOpen}
         onClose={() => setModalOpen(false)}

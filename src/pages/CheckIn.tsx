@@ -64,10 +64,10 @@ const CheckIn: React.FC = () => {
     noOfDays: 1,
     noOfPersons: 1,
     mobileNumber: '',
-    rate: '',
+    rate: 0,
     roomId: '',
     remarks: '',
-    includingGst: true,
+    includingGst: 'Y' as 'Y' | 'N',
     // Additional details fields
     emailId: '',
     idProof1: '',
@@ -109,6 +109,9 @@ const CheckIn: React.FC = () => {
     nationalityId: '',
     refModeId: '',
     resvSourceId: '',
+    includingGst: 'Y' as 'Y' | 'N',
+    noOfPersons: 1,
+    checkout: false,
   });
 
   // Function to show notifications
@@ -215,7 +218,7 @@ const CheckIn: React.FC = () => {
       emailId: checkIn.emailId || '',
       rate: checkIn.rate || 0,
       walkIn: checkIn.walkIn || 'N',
-      remarks: checkIn.remarks || '',
+      remarks:  checkIn.remarks || '',
       idProof1: checkIn.idProof1 || '',
       idProof2: checkIn.idProof2 || '',
       idProof3: checkIn.idProof3 || '',
@@ -228,6 +231,9 @@ const CheckIn: React.FC = () => {
       nationalityId: checkIn.nationalityId || '',
       refModeId: checkIn.refModeId || '',
       resvSourceId: checkIn.resvSourceId || '',
+      includingGst: (checkIn.includingGst || 'N') as 'Y' | 'N',
+      noOfPersons: checkIn.noOfPersons || 1,
+      checkout: checkIn.checkout || false,
     });
     
     // Fetch master data if not already fetched
@@ -251,7 +257,7 @@ const CheckIn: React.FC = () => {
     setEditFormData(prev => ({
       ...prev,
       [name]: type === 'number' ? Number(value) : 
-               type === 'checkbox' ? (e.target as HTMLInputElement).checked : value,
+               name === 'includingGst' ? value as 'Y' | 'N' : value,
     }));
   };
 
@@ -264,7 +270,7 @@ const CheckIn: React.FC = () => {
       if (editingCheckIn && editingCheckIn.folioNo) {
         const checkInData = {
           reservationNo: editFormData.reservationNo || undefined,
-          guestName: editFormData.guestName,
+          guestName: editFormData.guestName || undefined,
           roomId: editFormData.roomId,
           arrivalDate: editFormData.arrivalDate,
           departureDate: editFormData.departureDate,
@@ -285,6 +291,9 @@ const CheckIn: React.FC = () => {
           nationalityId: editFormData.nationalityId || undefined,
           refModeId: editFormData.refModeId || undefined,
           resvSourceId: editFormData.resvSourceId || undefined,
+          includingGst: editFormData.includingGst,
+          noOfPersons: editFormData.noOfPersons,
+          checkout: editFormData.checkout,
         };
 
         console.log('Updating check-in with data:', checkInData); // Debug log
@@ -294,6 +303,33 @@ const CheckIn: React.FC = () => {
         
         if (response.data.success) {
           console.log('Update successful:', response.data.data); // Debug log
+          
+          // If guest name was changed, also update related advances
+          if (editFormData.guestName !== editingCheckIn.guestName) {
+            try {
+              // Get all advances for this folio
+              const advancesResponse = await advanceApi.getAdvancesByFolio(editingCheckIn.folioNo);
+              if (advancesResponse.data.success && advancesResponse.data.data.length > 0) {
+                // Update each advance with the new guest name
+                const updatePromises = advancesResponse.data.data.map(advance => {
+                  if (advance.receiptNo) {
+                    return advanceApi.updateAdvance(advance.receiptNo, {
+                      ...advance,
+                      guestName: editFormData.guestName
+                    });
+                  }
+                  return Promise.resolve();
+                });
+                
+                // Wait for all updates to complete
+                await Promise.all(updatePromises);
+              }
+            } catch (advanceError) {
+              console.error('Error updating advances with new guest name:', advanceError);
+              // Don't fail the check-in update if advance updates fail
+            }
+          }
+          
           // Use Modal for success message
           setModalTitle("Success");
           setModalMessage("Check-in details updated successfully!");
@@ -523,6 +559,9 @@ const CheckIn: React.FC = () => {
           r.reservationNo.toLowerCase() === reservationNo.trim().toLowerCase()
         );
         if (reservation) {
+          // Debug: Log the reservation data to see what fields are available
+          console.log('Reservation data:', reservation);
+          
           // Calculate number of days
           const arrivalDate = new Date(reservation.arrivalDate);
           const departureDate = new Date(reservation.departureDate);
@@ -538,7 +577,8 @@ const CheckIn: React.FC = () => {
             noOfPersons: reservation.noOfPersons || 1,
             mobileNumber: reservation.mobileNumber || '',
             rate: reservation.rate || 0,
-            includingGst: reservation.includingGst === 'Y',
+            includingGst: (reservation.includingGst || 'N') as 'Y' | 'N',
+            remarks: reservation.remarks || '',
             // Additional details from reservation
             emailId: reservation.emailId || '',
             idProof1: reservation.idProof1 || '',
@@ -552,7 +592,7 @@ const CheckIn: React.FC = () => {
             arrivalDetails: reservation.arrivalDetails || '',
             nationalityId: reservation.nationalityId || '',
             refModeId: reservation.refModeId || '',
-            resvSourceId: reservation.reservationSourceId || '',
+            resvSourceId: (reservation as any).resvSourceId || reservation.reservationSourceId || ''
           }));
         } else {
           setFormData(prev => ({ ...prev, guestName: '' }));
@@ -561,6 +601,7 @@ const CheckIn: React.FC = () => {
         setFormData(prev => ({ ...prev, guestName: '' }));
       }
     } catch (error) {
+      console.error('Error in autoFillGuestName:', error);
       showNotification('Failed to auto-fill guest name. Please try again.', false);
       setFormData(prev => ({ ...prev, guestName: '' }));
     } finally {
@@ -569,6 +610,7 @@ const CheckIn: React.FC = () => {
   };
 
   // Function to check if a reservation can accept more check-ins
+
   const canCheckInToReservation = async (reservationNo: string): Promise<{ canCheckIn: boolean; message?: string }> => {
     try {
       const response = await reservationApi.searchReservations(reservationNo);
@@ -610,7 +652,7 @@ const CheckIn: React.FC = () => {
     setFormData(prev => ({
       ...prev,
       [name]: type === 'number' ? Number(value) : 
-               type === 'checkbox' ? (e.target as HTMLInputElement).checked : value,
+               name === 'includingGst' ? value as 'Y' | 'N' : value,
     }));
     
     // Auto-fill guest name and fetch reservation info when reservation number changes with debouncing
@@ -714,6 +756,9 @@ const CheckIn: React.FC = () => {
         nationalityId: formData.nationalityId,
         refModeId: formData.refModeId,
         resvSourceId: formData.resvSourceId,
+        includingGst: formData.includingGst,
+        noOfPersons: formData.noOfPersons,
+        checkout: false,
       };
 
       const response = await checkInApi.processCheckIn(checkInData);
@@ -763,7 +808,7 @@ const CheckIn: React.FC = () => {
             rate: 0,
             roomId: '',
             remarks: '',
-            includingGst: true,
+            includingGst: 'Y' as 'Y' | 'N',
             // Additional details fields
             emailId: '',
             idProof1: '',
@@ -806,7 +851,7 @@ const CheckIn: React.FC = () => {
       rate: 0,
       roomId: '',
       remarks: '',
-      includingGst: true,
+      includingGst: 'Y' as 'Y' | 'N',
       // Additional details fields
       emailId: '',
       idProof1: '',
@@ -1133,6 +1178,21 @@ const CheckIn: React.FC = () => {
                     />
                   </div>
 
+                  {/* Email ID */}
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                      Email ID
+                    </label>
+                    <input
+                      type="email"
+                      name="emailId"
+                      value={formData.emailId}
+                      onChange={handleInputChange}
+                      className="w-full px-2 py-1.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-xs"
+                      placeholder="Enter email address"
+                    />
+                  </div>
+
                   {/* Rate */}
                   <div>
                     <label className="block text-xs font-medium text-gray-700 mb-1">
@@ -1147,18 +1207,18 @@ const CheckIn: React.FC = () => {
                     />
                   </div>
 
-                  {/* Including GST Toggle */}
+                  {/* Including GST Field */}
                   <div>
-                    <label className="flex items-center space-x-2 mt-2">
-                      <input
-                        type="checkbox"
-                        name="includingGst"
-                        checked={formData.includingGst}
-                        onChange={handleInputChange}
-                        className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                      />
-                      <span className="text-xs font-medium text-gray-700">Including GST</span>
-                    </label>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Including GST</label>
+                    <select
+                      name="includingGst"
+                      value={formData.includingGst}
+                      onChange={(e) => setFormData(prev => ({ ...prev, includingGst: e.target.value as 'Y' | 'N' }))}
+                      className="w-full px-2 py-1.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-xs"
+                    >
+                      <option value="Y">Y</option>
+                      <option value="N">N</option>
+                    </select>
                   </div>
 
                   {/* Remarks */}
@@ -1203,18 +1263,6 @@ const CheckIn: React.FC = () => {
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mb-4">
                   {/* Additional Details Fields */}
-                  <div>
-                    <label className="block text-xs font-medium text-gray-700 mb-1">Email ID</label>
-                    <input
-                      type="email"
-                      name="emailId"
-                      value={formData.emailId}
-                      onChange={handleInputChange}
-                      className="w-full px-2 py-1.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-xs"
-                      placeholder="Enter email address"
-                    />
-                  </div>
-                  
                   <div>
                     <label className="block text-xs font-medium text-gray-700 mb-1">ID Proof 1</label>
                     <input
@@ -1619,6 +1667,21 @@ const CheckIn: React.FC = () => {
                       />
                     </div>
                     
+                    {/* No of Persons */}
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                        No of Persons
+                      </label>
+                      <input
+                        type="number"
+                        name="noOfPersons"
+                        min="1"
+                        value={editFormData.noOfPersons || 1}
+                        onChange={handleEditFormChange}
+                        className="w-full px-2 py-1.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-xs"
+                      />
+                    </div>
+                    
                     {/* Reservation Number */}
                     <div>
                       <label className="block text-xs font-medium text-gray-700 mb-1">
@@ -1649,46 +1712,6 @@ const CheckIn: React.FC = () => {
                       </select>
                     </div>
                     
-                    {/* ID Proofs */}
-                    <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-1">
-                        ID Proof 1
-                      </label>
-                      <input
-                        type="text"
-                        name="idProof1"
-                        value={editFormData.idProof1}
-                        onChange={handleEditFormChange}
-                        className="w-full px-2 py-1.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-xs"
-                      />
-                    </div>
-                    
-                    <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-1">
-                        ID Proof 2
-                      </label>
-                      <input
-                        type="text"
-                        name="idProof2"
-                        value={editFormData.idProof2}
-                        onChange={handleEditFormChange}
-                        className="w-full px-2 py-1.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-xs"
-                      />
-                    </div>
-                    
-                    <div>
-                      <label className="block text-xs font-medium text-gray-700 mb-1">
-                        ID Proof 3
-                      </label>
-                      <input
-                        type="text"
-                        name="idProof3"
-                        value={editFormData.idProof3}
-                        onChange={handleEditFormChange}
-                        className="w-full px-2 py-1.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-xs"
-                      />
-                    </div>
-                    
                     {/* Remarks */}
                     <div className="md:col-span-3">
                       <label className="block text-xs font-medium text-gray-700 mb-1">
@@ -1701,6 +1724,20 @@ const CheckIn: React.FC = () => {
                         rows={2}
                         className="w-full px-2 py-1.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-xs"
                       />
+                    </div>
+                    
+                    {/* Including GST Field */}
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">Including GST</label>
+                      <select
+                        name="includingGst"
+                        value={editFormData.includingGst}
+                        onChange={(e) => setEditFormData(prev => ({ ...prev, includingGst: e.target.value as 'Y' | 'N' }))}
+                        className="w-full px-2 py-1.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-xs"
+                      >
+                        <option value="Y">Y</option>
+                        <option value="N">N</option>
+                      </select>
                     </div>
                   </div>
                 ) : (
@@ -1860,6 +1897,61 @@ const CheckIn: React.FC = () => {
                           </option>
                         ))}
                       </select>
+                    </div>
+                    
+                    {/* No of Persons */}
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                        No of Persons
+                      </label>
+                      <input
+                        type="number"
+                        name="noOfPersons"
+                        min="1"
+                        value={editFormData.noOfPersons || 1}
+                        onChange={handleEditFormChange}
+                        className="w-full px-2 py-1.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-xs"
+                      />
+                    </div>
+                    
+                    {/* ID Proofs */}
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                        ID Proof 1
+                      </label>
+                      <input
+                        type="text"
+                        name="idProof1"
+                        value={editFormData.idProof1}
+                        onChange={handleEditFormChange}
+                        className="w-full px-2 py-1.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-xs"
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                        ID Proof 2
+                      </label>
+                      <input
+                        type="text"
+                        name="idProof2"
+                        value={editFormData.idProof2}
+                        onChange={handleEditFormChange}
+                        className="w-full px-2 py-1.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-xs"
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                        ID Proof 3
+                      </label>
+                      <input
+                        type="text"
+                        name="idProof3"
+                        value={editFormData.idProof3}
+                        onChange={handleEditFormChange}
+                        className="w-full px-2 py-1.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-xs"
+                      />
                     </div>
                   </div>
                 )}

@@ -24,7 +24,7 @@ export interface Room {
   roomId: string;
   roomNo: string;
   floor: string;
-  status: 'VR' | 'OD' | 'OI' | 'Blocked';
+  status: 'VR' | 'OD' | 'OI' | 'VD';
   roomTypeId: string;
   roomTypeName?: string;
   guestName?: string;
@@ -95,6 +95,9 @@ export interface CheckIn {
   rate: number;
   walkIn: 'Y' | 'N';
   remarks?: string;
+  includingGst?: 'Y' | 'N';
+  noOfPersons?: number;
+  checkout?: boolean;
   // Enhanced fields as per API documentation
   idProof1?: string;
   idProof2?: string;
