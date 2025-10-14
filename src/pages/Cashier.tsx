@@ -26,6 +26,13 @@ const Cashier = () => {
   const [searchType, setSearchType] = useState<'all' | 'reservation' | 'guest' | 'receipt'>('all');
   const [searchDate, setSearchDate] = useState('');
   
+  // Add state for in-house rooms
+  const [inHouseRooms, setInHouseRooms] = useState<Room[]>([]);
+  // Add state for in-house reservations
+  const [inHouseReservations, setInHouseReservations] = useState<Reservation[]>([]);
+  // Add state for generated bills
+  const [generatedBills, setGeneratedBills] = useState<any[]>([]);
+  
   // Form state for different record types
   const [formData, setFormData] = useState({
     receiptNumber: `AUTO-GEN-${Math.floor(Math.random() * 9000 + 1000)}`,
@@ -58,6 +65,11 @@ const Cashier = () => {
   const [reprintData, setReprintData] = useState({
     billNo: '',
   });
+  
+  // Available bills for reprint help window
+  const [availableBills, setAvailableBills] = useState<any[]>([]);
+  const [showBillsHelp, setShowBillsHelp] = useState(false);
+  const [billsLoading, setBillsLoading] = useState(false);
 
   const handleClearForm = () => {
     setFormData({
@@ -94,12 +106,21 @@ const Cashier = () => {
   
   // Settlement Entry state
   const [settlementData, setSettlementData] = useState({
-    folioNo: '',
+    billNo: '',
     guestName: '',
     settlementTypeId: '',
     amount: 0,
     remarks: '',
+    // Add fields for receipt and refund handling
+    receiptNo: '',
+    isRefund: false,
+    refundAmount: 0,
   });
+  
+  // Add state for available bills for settlement
+  const [availableSettlementBills, setAvailableSettlementBills] = useState<any[]>([]);
+  const [showSettlementBillsHelp, setShowSettlementBillsHelp] = useState(false);
+  const [settlementBillsLoading, setSettlementBillsLoading] = useState(false);
   
   // Sales Receipts state (removed - now handled by SalesReceipts component)
   
@@ -156,6 +177,84 @@ const Cashier = () => {
   
   // Add state for room information
   const [roomInfo, setRoomInfo] = useState<Record<string, string>>({}); // folioNo -> roomNo mapping
+  
+  // Add function to fetch in-house rooms (rooms with checked-in guests)
+  const fetchInHouseRooms = async () => {
+    try {
+      // Get all in-house guests
+      const checkInsRes = await checkInApi.getInHouseGuests();
+      if (checkInsRes.data.success) {
+        // Get all rooms
+        const roomsRes = await roomApi.getRooms();
+        if (roomsRes.data.success) {
+          // Filter to only rooms with checked-in guests (not checked out)
+          const checkedInGuests = checkInsRes.data.data.filter(guest => !guest.checkout);
+          const inHouseRoomIds = new Set(checkedInGuests.map(guest => guest.roomId));
+          const inHouseRoomsList = roomsRes.data.data.filter(room => inHouseRoomIds.has(room.roomId));
+          setInHouseRooms(inHouseRoomsList);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching in-house rooms:', error);
+    }
+  };
+
+  // Add function to fetch in-house reservations (reservations with checked-in guests)
+  const fetchInHouseReservations = async () => {
+    try {
+      // Get all reservations
+      const reservationsRes = await reservationApi.getReservations();
+      if (reservationsRes.data.success) {
+        // Get all in-house guests
+        const checkInsRes = await checkInApi.getInHouseGuests();
+        if (checkInsRes.data.success) {
+          // Filter to only reservations with checked-in guests (not checked out)
+          const checkedInGuests = checkInsRes.data.data.filter(guest => !guest.checkout);
+          const inHouseReservationNos = new Set(checkedInGuests.map(guest => guest.reservationNo));
+          const inHouseReservationsList = reservationsRes.data.data.filter(reservation => 
+            inHouseReservationNos.has(reservation.reservationNo)
+          );
+          setInHouseReservations(inHouseReservationsList);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching in-house reservations:', error);
+    }
+  };
+
+  // Add function to fetch generated bills
+  const fetchGeneratedBills = async () => {
+    try {
+      // Get all in-house guests
+      const checkInsRes = await checkInApi.getInHouseGuests();
+      if (checkInsRes.data.success) {
+        // For each in-house guest, try to get their bill
+        const bills = [];
+        const checkedInGuests = checkInsRes.data.data.filter(guest => !guest.checkout);
+        
+        for (const guest of checkedInGuests) {
+          try {
+            // Generate a preview bill for this folio
+            const currentDate = new Date();
+            const currentYear = currentDate.getFullYear();
+            const nextYear = currentYear + 1;
+            const financialYear = `${currentYear.toString().slice(-2)}-${nextYear.toString().slice(-2)}`;
+            const billResponse = await billApi.generateBill(guest.folioNo, financialYear);
+            if (billResponse.data.success && billResponse.data.data) {
+              bills.push(billResponse.data.data);
+            }
+          } catch (error) {
+            // Continue to next guest if bill generation fails for this one
+            console.error(`Error generating bill for folio ${guest.folioNo}:`, error);
+          }
+        }
+        
+        setGeneratedBills(bills);
+      }
+    } catch (error) {
+      console.error('Error fetching generated bills:', error);
+    }
+  };
 
   // Modal states
   const [modalOpen, setModalOpen] = useState(false);
@@ -187,6 +286,45 @@ const Cashier = () => {
       setModalOpen(false);
     }, 5000);
   };
+  
+  // Function to fetch available bills for reprint help
+  const fetchAvailableBills = async () => {
+    setBillsLoading(true);
+    try {
+      // Get all in-house guests
+      const checkInsRes = await checkInApi.getInHouseGuests();
+      if (checkInsRes.data.success) {
+        const bills = [];
+        
+        // For each in-house guest, try to get their bill
+        for (const guest of checkInsRes.data.data) {
+          if (guest.folioNo) {
+            try {
+              // Generate a preview bill for this folio
+              const currentDate = new Date();
+              const currentYear = currentDate.getFullYear();
+              const nextYear = currentYear + 1;
+              const financialYear = `${currentYear.toString().slice(-2)}-${nextYear.toString().slice(-2)}`;
+              const billResponse = await billApi.generateBill(guest.folioNo, financialYear);
+              if (billResponse.data.success && billResponse.data.data) {
+                bills.push(billResponse.data.data);
+              }
+            } catch (error) {
+              // Continue to next guest if bill generation fails for this one
+              console.error(`Error generating bill for folio ${guest.folioNo}:`, error);
+            }
+          }
+        }
+        
+        setAvailableBills(bills);
+      }
+    } catch (error) {
+      console.error('Error fetching available bills:', error);
+      showNotification('Failed to fetch available bills. Please try again.', false);
+    } finally {
+      setBillsLoading(false);
+    }
+  };
 
   useEffect(() => {
     fetchPaymentModes();
@@ -209,6 +347,17 @@ const Cashier = () => {
       fetchAdvances();
     }
   }, [activeTab, searchTerm, searchType, searchDate]);
+
+  // Fetch in-house data when recordSubTab changes
+  useEffect(() => {
+    if (recordSubTab === 'room') {
+      fetchInHouseRooms();
+    } else if (recordSubTab === 'reservation') {
+      fetchInHouseReservations();
+    } else if (recordSubTab === 'bill') {
+      fetchGeneratedBills();
+    }
+  }, [recordSubTab]);
 
   const fetchPaymentModes = async () => {
     try {
@@ -586,19 +735,6 @@ const Cashier = () => {
     }
   };
 
-  const handleSettlementInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-    const { name, value, type } = e.target;
-    setSettlementData(prev => ({
-      ...prev,
-      [name]: type === 'number' ? Number(value) : value,
-    }));
-    
-    // Auto-fill guest name when folio number changes
-    if (name === 'folioNo') {
-      autoFillGuestNameForSettlement(value);
-    }
-  };
-
   // handleSalesInputChange function removed - now handled by SalesReceipts component
 
   // handleSplitBillInputChange function removed - now handled by SplitBill component
@@ -610,6 +746,7 @@ const Cashier = () => {
       setFormData(prev => ({ ...prev, guestName: '' }));
       setAttemptedAutoFill(false);
       setContextError(null);
+      setBillInfo({ folioNo: '', guestName: '' }); // Clear bill info
       return;
     }
     
@@ -625,198 +762,30 @@ const Cashier = () => {
       setContextError(null);
       
       try {
-        // Normalize the contextValue based on the current tab and sub-tab
-        let normalizedContextValue = contextValue.trim();
-        if (activeTab === 'record') {
-          if (recordSubTab === 'reservation' && normalizedContextValue && !normalizedContextValue.startsWith('R')) {
-            normalizedContextValue = 'R' + normalizedContextValue;
-          } else if (recordSubTab === 'bill' && normalizedContextValue && !normalizedContextValue.startsWith('B')) {
-            normalizedContextValue = 'B' + normalizedContextValue;
+        if (recordSubTab === 'reservation') {
+          // Find reservation in in-house reservations
+          const reservation = inHouseReservations.find(r => r.reservationNo === contextValue);
+          if (reservation) {
+            setFormData(prev => ({ ...prev, guestName: reservation.guestName }));
+            setBillInfo({ folioNo: '', guestName: '' }); // Clear bill info
+          } else {
+            setFormData(prev => ({ ...prev, guestName: '' }));
+            setBillInfo({ folioNo: '', guestName: '' }); // Clear bill info
+            setContextError('Reservation not found');
           }
-        }
-        
-        // Check if normalizedContextValue has a valid prefix
-        if (/^[RFBrfb]/.test(normalizedContextValue)) {
-          // Determine context type by prefix (case insensitive)
-          if (/^F/i.test(normalizedContextValue)) {
-            // Folio (inhouse) - get advances by folio number to extract guest name
-            try {
-              const response = await advanceApi.getAdvancesByFolio(normalizedContextValue);
-              if (response.data.success && response.data.data.length > 0) {
-                // Get guest name from the first advance record
-                const guestName = response.data.data[0].guestName;
-                if (guestName) {
-                  setFormData(prev => ({ ...prev, guestName }));
-                  setBillInfo({ folioNo: '', guestName: '' }); // Clear bill info
-                } else {
-                  // If no guest name in advances, fall back to check-in API
-                  try {
-                    const checkInsRes = await checkInApi.searchCheckIns(normalizedContextValue);
-                    if (checkInsRes.data.success && checkInsRes.data.data.length > 0) {
-                      const checkIn = checkInsRes.data.data.find((c: CheckIn) => c.folioNo === normalizedContextValue);
-                      if (checkIn) {
-                        setFormData(prev => ({ ...prev, guestName: checkIn.guestName }));
-                        setBillInfo({ folioNo: '', guestName: '' }); // Clear bill info
-                      } else {
-                        setFormData(prev => ({ ...prev, guestName: '' }));
-                        setBillInfo({ folioNo: '', guestName: '' }); // Clear bill info
-                        setContextError('Folio not found');
-                      }
-                    } else {
-                      setFormData(prev => ({ ...prev, guestName: '' }));
-                      setBillInfo({ folioNo: '', guestName: '' }); // Clear bill info
-                      setContextError('Folio not found');
-                    }
-                  } catch (checkInError) {
-                    showNotification('Failed to fetch guest name from check-in API. Please try again.', false);
-                    setFormData(prev => ({ ...prev, guestName: '' }));
-                    setBillInfo({ folioNo: '', guestName: '' }); // Clear bill info
-                    setContextError('Failed to fetch guest information for folio');
-                  }
-                }
-              } else {
-                // If no advances found, fall back to check-in API
-                try {
-                  const checkInsRes = await checkInApi.searchCheckIns(normalizedContextValue);
-                  if (checkInsRes.data.success && checkInsRes.data.data.length > 0) {
-                    const checkIn = checkInsRes.data.data.find((c: CheckIn) => c.folioNo === normalizedContextValue);
-                    if (checkIn) {
-                      setFormData(prev => ({ ...prev, guestName: checkIn.guestName }));
-                      setBillInfo({ folioNo: '', guestName: '' }); // Clear bill info
-                    } else {
-                      setFormData(prev => ({ ...prev, guestName: '' }));
-                      setBillInfo({ folioNo: '', guestName: '' }); // Clear bill info
-                      setContextError('Folio not found');
-                    }
-                  } else {
-                    setFormData(prev => ({ ...prev, guestName: '' }));
-                    setBillInfo({ folioNo: '', guestName: '' }); // Clear bill info
-                    setContextError('Folio not found');
-                  }
-                } catch (checkInError) {
-                  showNotification('Failed to fetch guest name from check-in API. Please try again.', false);
-                  setFormData(prev => ({ ...prev, guestName: '' }));
-                  setBillInfo({ folioNo: '', guestName: '' }); // Clear bill info
-                  setContextError('Failed to fetch guest information for folio');
-                }
-              }
-            } catch (folioError) {
-              showNotification('Failed to fetch advances for folio. Please try again.', false);
-              setFormData(prev => ({ ...prev, guestName: '' }));
-              setBillInfo({ folioNo: '', guestName: '' }); // Clear bill info
-              setContextError('Failed to fetch guest name for folio');
-            }
-          } else if (/^R/i.test(normalizedContextValue)) {
-            // Reservation - get advances by reservation number to extract guest name
-            try {
-              // Remove 'R' prefix if present to match the database format
-              const reservationNo = normalizedContextValue.trim().replace(/^R/i, '');
-              
-              // First try to get guest name from reservation API
-              try {
-                const reservationResponse = await reservationApi.searchReservations(reservationNo);
-                if (reservationResponse.data.success && reservationResponse.data.data.length > 0) {
-                  // Find the exact match for the reservation number
-                  const reservation = reservationResponse.data.data.find((r: any) => 
-                    r.reservationNo === reservationNo
-                  );
-                  if (reservation) {
-                    // Check if all rooms for this reservation have been assigned
-                    const roomsCheckedIn = reservation.roomsCheckedIn || 0;
-                    const noOfRooms = reservation.noOfRooms || 0;
-                    
-                    if (roomsCheckedIn >= noOfRooms) {
-                      showNotification('All rooms for this reservation have already been assigned. Cannot accept advance payments.', false);
-                    }
-                    
-                    setFormData(prev => ({ ...prev, guestName: reservation.guestName }));
-                    setBillInfo({ folioNo: '', guestName: '' }); // Clear bill info
-                    return; // Successfully found reservation
-                  }
-                }
-              } catch (reservationError) {
-                // Continue to advances API if reservation API fails
-              }
-              
-              // If reservation API fails, try to get guest name from advances API
-              const response = await advanceApi.getAdvancesByReservation(reservationNo);
-              if (response.data.success && response.data.data.length > 0) {
-                // Get guest name from the first advance record
-                const guestName = response.data.data[0].guestName;
-                if (guestName) {
-                  setFormData(prev => ({ ...prev, guestName }));
-                  setBillInfo({ folioNo: '', guestName: '' }); // Clear bill info
-                } else {
-                  setFormData(prev => ({ ...prev, guestName: '' }));
-                  setBillInfo({ folioNo: '', guestName: '' }); // Clear bill info
-                  setContextError('Guest name not found for this reservation');
-                }
-              } else {
-                setFormData(prev => ({ ...prev, guestName: '' }));
-                setBillInfo({ folioNo: '', guestName: '' }); // Clear bill info
-                setContextError('Reservation not found');
-              }
-            } catch (guestError) {
-              showNotification('Failed to fetch guest name for reservation. Please try again.', false);
-              setFormData(prev => ({ ...prev, guestName: '' }));
-              setBillInfo({ folioNo: '', guestName: '' }); // Clear bill info
-              setContextError('Failed to fetch guest name for reservation');
-            }
-          } else if (/^B/i.test(normalizedContextValue)) {
-            // Bill - try to get guest name and folio number by generating a preview of the bill
-            try {
-              // Extract the bill number (remove 'B' prefix if present)
-              const billNo = normalizedContextValue.trim().replace(/^B/i, '');
-              
-              // We need to find the folio number associated with this bill first
-              // Since there's no direct API to get bill details by bill number,
-              // we'll need to search through check-ins and their associated bills
-              
-              // First, get all in-house guests
-              const checkInsRes = await checkInApi.getInHouseGuests();
-              if (checkInsRes.data.success && checkInsRes.data.data.length > 0) {
-                // For each check-in, try to generate a bill and see if it matches
-                for (const checkIn of checkInsRes.data.data) {
-                  if (checkIn.folioNo) {
-                    try {
-                      // Generate a preview bill for this folio
-                      const currentDate = new Date();
-                      const currentYear = currentDate.getFullYear();
-                      const nextYear = currentYear + 1;
-                      const financialYear = `${currentYear.toString().slice(-2)}-${nextYear.toString().slice(-2)}`;
-                      const billResponse = await billApi.generateBill(checkIn.folioNo, financialYear);
-                      if (billResponse.data.success && billResponse.data.data) {
-                        const billData = billResponse.data.data;
-                        // Check if this is the bill we're looking for
-                        if (billData.billNo && billData.billNo.includes(billNo)) {
-                          const guestName = billData.guestName || checkIn.guestName || '';
-                          const folioNo = checkIn.folioNo;
-                          setFormData(prev => ({ ...prev, guestName }));
-                          setBillInfo({ folioNo, guestName });
-                          return; // Found the bill, exit the loop
-                        }
-                      }
-                    } catch (billError) {
-                      // Continue to next check-in if bill generation fails
-                    }
-                  }
-                }
-              }
-              // If no matching bill found, clear guest name and bill info
-              setFormData(prev => ({ ...prev, guestName: '' }));
-              setBillInfo({ folioNo: '', guestName: '' });
-              setContextError('Bill not found');
-            } catch (error) {
-              showNotification('Failed to fetch guest name for bill. Please try again.', false);
-              setFormData(prev => ({ ...prev, guestName: '' }));
-              setBillInfo({ folioNo: '', guestName: '' });
-              setContextError('Failed to fetch guest name for bill');
-            }
+        } else if (recordSubTab === 'bill') {
+          // Find bill in generated bills
+          const bill = generatedBills.find(b => b.billNo === contextValue);
+          if (bill) {
+            const guestName = bill.guestName || '';
+            const folioNo = bill.folioNo || '';
+            setFormData(prev => ({ ...prev, guestName }));
+            setBillInfo({ folioNo, guestName });
+          } else {
+            setFormData(prev => ({ ...prev, guestName: '' }));
+            setBillInfo({ folioNo: '', guestName: '' }); // Clear bill info
+            setContextError('Bill not found');
           }
-        } else {
-          // No valid prefix
-          setFormData(prev => ({ ...prev, guestName: '' }));
-          setContextError('Please enter a valid context value (R..., F..., or B...)');
         }
       } catch (error) {
         showNotification('Failed to auto-fill guest name. Please try again.', false);
@@ -826,7 +795,7 @@ const Cashier = () => {
         setAutoFillLoading(false);
       }
     }, 300); // 300ms debounce delay
-    
+  
     setDebounceTimer(timer);
   };
 
@@ -839,51 +808,46 @@ const Cashier = () => {
       setRoomNoError(null);
       return;
     }
-    
+
     // Clear previous timer
     if (debounceTimer) {
       clearTimeout(debounceTimer);
     }
-    
+
     // Set new timer for debouncing
     const timer = setTimeout(async () => {
       setAutoFillLoading(true);
       setRoomNoError(null);
-      
+
       try {
-        // First, get the room ID by room number (for validation and guest lookup)
-        const roomsRes = await roomApi.getRooms();
-        if (roomsRes.data.success) {
-          const room = roomsRes.data.data.find((r: Room) => r.roomNo === roomNo);
-          if (room) {
-            // Now get the guest name and folio number by room ID
-            const checkInRes = await checkInApi.getCheckInByRoom(room.roomId);
-            if (checkInRes.data.success && checkInRes.data.data) {
-              // Check if the guest has checked out (checkout status should be false for advances)
-              const checkInData = checkInRes.data.data;
-              if (checkInData.checkout === true) {
-                setFormData(prev => ({ ...prev, guestName: '' }));
-                setRoomAdvanceInfo({ folioNo: '', guestName: '' });
-                setRoomNoError('Guest has already checked out from this room. Cannot accept advance payments.');
-                return;
-              }
-              
-              const guestName = checkInRes.data.data.guestName;
-              const folioNo = checkInRes.data.data.folioNo;
-              setFormData(prev => ({ ...prev, guestName }));
-              setRoomAdvanceInfo({ folioNo, guestName });
-            } else {
+        // First, find the room in in-house rooms
+        const room = inHouseRooms.find((r: Room) => r.roomNo === roomNo);
+        if (room) {
+          // Now get the guest name and folio number by room ID
+          const checkInRes = await checkInApi.getCheckInByRoom(room.roomId);
+          if (checkInRes.data.success && checkInRes.data.data) {
+            // Check if the guest has checked out (checkout status should be false for advances)
+            const checkInData = checkInRes.data.data;
+            if (checkInData.checkout === true) {
               setFormData(prev => ({ ...prev, guestName: '' }));
               setRoomAdvanceInfo({ folioNo: '', guestName: '' });
-              setRoomNoError('No guest found in this room');
+              setRoomNoError('Guest has already checked out from this room. Cannot accept advance payments.');
+              return;
             }
+
+            const guestName = checkInRes.data.data.guestName;
+            const folioNo = checkInRes.data.data.folioNo;
+            setFormData(prev => ({ ...prev, guestName }));
+            setRoomAdvanceInfo({ folioNo, guestName });
           } else {
             setFormData(prev => ({ ...prev, guestName: '' }));
             setRoomAdvanceInfo({ folioNo: '', guestName: '' });
-            setRoomNoError('Room not found');
+            setRoomNoError('No guest found in this room');
           }
         } else {
-          showNotification('Failed to fetch room information.', false);
+          setFormData(prev => ({ ...prev, guestName: '' }));
+          setRoomAdvanceInfo({ folioNo: '', guestName: '' });
+          setRoomNoError('Room not found or no guest checked in');
         }
       } catch (error) {
         showNotification('Failed to fetch guest name for room advance. Please try again.', false);
@@ -894,7 +858,7 @@ const Cashier = () => {
         setAutoFillLoading(false);
       }
     }, 300); // 300ms debounce delay
-    
+
     setDebounceTimer(timer);
   };
 
@@ -1123,31 +1087,6 @@ const Cashier = () => {
     }, 300); // 300ms debounce delay
     
     setDebounceTimer(timer);
-  };
-
-  // Function to auto-fill guest name for settlement entry based on folio number
-  const autoFillGuestNameForSettlement = async (folioNo: string) => {
-    if (!folioNo) {
-      setSettlementData(prev => ({ ...prev, guestName: '' }));
-      return;
-    }
-    
-    try {
-      const checkInsRes = await checkInApi.searchCheckIns(folioNo);
-      if (checkInsRes.data.success && checkInsRes.data.data.length > 0) {
-        const checkIn = checkInsRes.data.data.find((c: CheckIn) => c.folioNo === folioNo);
-        if (checkIn) {
-          setSettlementData(prev => ({ ...prev, guestName: checkIn.guestName }));
-        } else {
-          setSettlementData(prev => ({ ...prev, guestName: '' }));
-        }
-      } else {
-        setSettlementData(prev => ({ ...prev, guestName: '' }));
-      }
-    } catch (error) {
-      showNotification('Failed to fetch guest name for settlement entry. Please try again.', false);
-      setSettlementData(prev => ({ ...prev, guestName: '' }));
-    }
   };
 
   // Function to auto-fill guest name for split bill based on folio number (removed - now handled by SplitBill component)
@@ -2001,12 +1940,85 @@ const Cashier = () => {
     showNotification('Please use the new expense entry form.', false);
   };
 
+  // Function to auto-fill guest name for settlement entry based on bill number
+  const autoFillGuestNameForSettlement = async (billNo: string) => {
+    if (!billNo) {
+      setSettlementData(prev => ({ ...prev, guestName: '', amount: 0 }));
+      return;
+    }
+    
+    try {
+      // Try to get the bill data by bill number
+      const billResponse = await billApi.getBillByBillNo(billNo);
+      if (billResponse.data.success && billResponse.data.data) {
+        const billData = billResponse.data.data;
+        const guestName = billData.guestName || '';
+        // Calculate the amount due (total - advances)
+        const totalAmount = billData.totalAmount || 0;
+        const advanceAmount = billData.advanceAmount || 0;
+        const amountDue = Math.max(0, totalAmount - advanceAmount);
+        
+        setSettlementData(prev => ({ 
+          ...prev, 
+          guestName,
+          amount: amountDue,
+          isRefund: advanceAmount > totalAmount,
+          refundAmount: advanceAmount > totalAmount ? advanceAmount - totalAmount : 0
+        }));
+      } else {
+        setSettlementData(prev => ({ ...prev, guestName: '', amount: 0 }));
+      }
+    } catch (error) {
+      showNotification('Failed to fetch guest name for settlement entry. Please try again.', false);
+      setSettlementData(prev => ({ ...prev, guestName: '', amount: 0 }));
+    }
+  };
+
+  // Function to fetch available bills for settlement help
+  const fetchAvailableSettlementBills = async () => {
+    setSettlementBillsLoading(true);
+    try {
+      // Get all in-house guests
+      const checkInsRes = await checkInApi.getInHouseGuests();
+      if (checkInsRes.data.success) {
+        const bills = [];
+        
+        // For each in-house guest, try to get their bill
+        for (const guest of checkInsRes.data.data) {
+          if (guest.folioNo) {
+            try {
+              // Generate a preview bill for this folio
+              const currentDate = new Date();
+              const currentYear = currentDate.getFullYear();
+              const nextYear = currentYear + 1;
+              const financialYear = `${currentYear.toString().slice(-2)}-${nextYear.toString().slice(-2)}`;
+              const billResponse = await billApi.generateBill(guest.folioNo, financialYear);
+              if (billResponse.data.success && billResponse.data.data) {
+                bills.push(billResponse.data.data);
+              }
+            } catch (error) {
+              // Continue to next guest if bill generation fails for this one
+              console.error(`Error generating bill for folio ${guest.folioNo}:`, error);
+            }
+          }
+        }
+        
+        setAvailableSettlementBills(bills);
+      }
+    } catch (error) {
+      console.error('Error fetching available bills for settlement:', error);
+      showNotification('Failed to fetch available bills for settlement. Please try again.', false);
+    } finally {
+      setSettlementBillsLoading(false);
+    }
+  };
+
   // Handle settlement entry
   const handleSettlementEntry = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     try {
-      if (!settlementData.folioNo || !settlementData.settlementTypeId || !settlementData.amount) {
+      if (!settlementData.billNo || !settlementData.settlementTypeId || !settlementData.amount) {
         showNotification('Please fill all required fields.', false);
         setLoading(false);
         return;
@@ -2016,54 +2028,40 @@ const Cashier = () => {
       const settlementType = settlementTypes.find(type => type.id === settlementData.settlementTypeId);
       const paymentNotes = settlementData.remarks || `Settlement via ${settlementType?.name || settlementData.settlementTypeId}`;
       
-      // First, we need to get or generate a bill for this folio
-      const currentDate = new Date();
-      const currentYear = currentDate.getFullYear();
-      const nextYear = currentYear + 1;
-      const financialYear = `${currentYear.toString().slice(-2)}-${nextYear.toString().slice(-2)}`;
-      
-      // Try to get existing bill data by folio number
-      let billNo: string;
-      try {
-        const billResponse = await billApi.getBillByFolio(settlementData.folioNo);
-        if (billResponse.data.success && billResponse.data.data) {
-          billNo = billResponse.data.data.billNo;
-        } else {
-          // Generate a new bill if not found
-          const generateResponse = await billApi.generateBill(settlementData.folioNo, financialYear);
-          if (generateResponse.data.success && generateResponse.data.data) {
-            billNo = generateResponse.data.data.billNo;
-          } else {
-            throw new Error('Failed to generate bill');
-          }
-        }
-      } catch (error) {
-        // If fetching bill by folio fails, try to generate a new bill
-        const generateResponse = await billApi.generateBill(settlementData.folioNo, financialYear);
-        if (generateResponse.data.success && generateResponse.data.data) {
-          billNo = generateResponse.data.data.billNo;
-        } else {
-          throw new Error('Failed to generate bill');
-        }
+      // Generate receipt number for cash settlements
+      let receiptNo = settlementData.receiptNo;
+      if (settlementType?.name?.toLowerCase().includes('cash')) {
+        receiptNo = `RCPT-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
       }
       
-      // Now add the payment/settlement to the bill
-      const paymentResponse = await billApi.addPaymentToBill(billNo, {
+      // Add the payment/settlement to the bill
+      const paymentResponse = await billApi.addPaymentToBill(settlementData.billNo, {
         paymentAmount: settlementData.amount,
         modeOfPaymentId: settlementData.settlementTypeId,
         paymentNotes: paymentNotes
+        // Remove receiptNo since it's not in the type definition
       });
       
       if (paymentResponse.data.success) {
+        // If this is a refund, create a refund voucher
+        if (settlementData.isRefund && settlementData.refundAmount > 0) {
+          const refundVoucherNo = `REF-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+          // Here you would typically save the refund voucher to the database
+          console.log(`Refund voucher ${refundVoucherNo} created for amount ${settlementData.refundAmount}`);
+        }
+        
         showNotification('Settlement recorded successfully!', true);
         
         // Reset form
         setSettlementData({
-          folioNo: '',
+          billNo: '',
           guestName: '',
           settlementTypeId: '',
           amount: 0,
           remarks: '',
+          receiptNo: '',
+          isRefund: false,
+          refundAmount: 0,
         });
       } else {
         throw new Error(paymentResponse.data.message || 'Failed to record settlement');
@@ -2073,6 +2071,19 @@ const Cashier = () => {
       showNotification(`Error: ${error.response?.data?.message || error.message || 'Failed to record settlement'}`, false);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSettlementInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
+    const { name, value, type } = e.target;
+    setSettlementData(prev => ({
+      ...prev,
+      [name]: type === 'number' ? Number(value) : value,
+    }));
+    
+    // Auto-fill guest name when bill number changes
+    if (name === 'billNo') {
+      autoFillGuestNameForSettlement(value);
     }
   };
 
@@ -2240,35 +2251,61 @@ const Cashier = () => {
                     </div>
                     
                     {/* Context Dropdown (for reservation and bill) or Room Number (for room) */}
-                    {recordSubTab !== 'room' ? (
+                    {recordSubTab === 'reservation' ? (
                       <div>
                         <label className="block text-xs font-medium text-gray-700 mb-1">
-                          {recordSubTab === 'reservation' ? 'Reservation Number *' : 'Bill Number *'}
+                          Reservation Number *
                         </label>
-                        <input
-                          type="text"
+                        <select
                           name="contextValue"
                           value={formData.contextValue}
                           onChange={handleInputChange}
-                          placeholder={recordSubTab === 'reservation' ? "e.g., 1-25-26" : "e.g., 12345"}
                           className="w-full px-2 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-xs"
                           required
-                        />
+                        >
+                          <option value="">Select a reservation</option>
+                          {inHouseReservations.map((reservation) => (
+                            <option key={reservation.reservationNo} value={reservation.reservationNo}>
+                              {reservation.reservationNo} - {reservation.guestName}
+                            </option>
+                          ))}
+                        </select>
                         <p className="mt-1 text-xs text-gray-500">
-                          {recordSubTab === 'reservation' 
-                            ? "Enter reservation number (R prefix will be added automatically)" 
-                            : "Enter bill number (B prefix will be added automatically)"}
+                          Select reservation (only reservations with checked-in guests are shown)
                         </p>
                         {/* Display reservation information when available */}
-                        {recordSubTab === 'reservation' && formData.guestName && !billInfo.folioNo && (
+                        {formData.guestName && !billInfo.folioNo && (
                           <div className="mt-2 p-2 bg-green-50 rounded-lg border border-green-200">
                             <p className="text-xs text-green-800">
                               <span className="font-medium">Guest:</span> {formData.guestName}
                             </p>
                           </div>
                         )}
+                      </div>
+                    ) : recordSubTab === 'bill' ? (
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">
+                          Bill Number *
+                        </label>
+                        <select
+                          name="contextValue"
+                          value={formData.contextValue}
+                          onChange={handleInputChange}
+                          className="w-full px-2 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-xs"
+                          required
+                        >
+                          <option value="">Select a bill</option>
+                          {generatedBills.map((bill) => (
+                            <option key={bill.billNo} value={bill.billNo}>
+                              {bill.billNo} - {bill.guestName || 'N/A'}
+                            </option>
+                          ))}
+                        </select>
+                        <p className="mt-1 text-xs text-gray-500">
+                          Select bill (only generated bills are shown)
+                        </p>
                         {/* Display bill information when available */}
-                        {recordSubTab === 'bill' && billInfo.folioNo && (
+                        {billInfo.folioNo && (
                           <div className="mt-2 p-2 bg-green-50 rounded-lg border border-green-200">
                             <p className="text-xs text-green-800">
                               <span className="font-medium">Folio:</span> {billInfo.folioNo}
@@ -2284,17 +2321,22 @@ const Cashier = () => {
                         <label className="block text-xs font-medium text-gray-700 mb-1">
                           Room Number *
                         </label>
-                        <input
-                          type="text"
+                        <select
                           name="roomNo"
                           value={formData.roomNo}
                           onChange={handleInputChange}
-                          placeholder="e.g., 101"
                           className="w-full px-2 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-xs"
                           required
-                        />
+                        >
+                          <option value="">Select a room</option>
+                          {inHouseRooms.map((room) => (
+                            <option key={room.roomId} value={room.roomNo}>
+                              {room.roomNo} - {room.roomTypeName || 'Room'}
+                            </option>
+                          ))}
+                        </select>
                         <p className="mt-1 text-xs text-gray-500">
-                          Enter room number (guest details will be auto-filled)
+                          Select room number (only rooms with checked-in guests are shown)
                         </p>
                         {/* Display folio number and guest name when available */}
                         {roomAdvanceInfo.folioNo && (
@@ -2480,25 +2522,8 @@ const Cashier = () => {
                         value={editForm.receiptNumber}
                         onChange={handleEditInputChange}
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        readOnly
                       />
-                    </div>
-                    
-                    {/* Context Value */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Context (Reservation/Bill/Folio)
-                      </label>
-                      <input
-                        type="text"
-                        name="contextValue"
-                        value={editForm.contextValue}
-                        onChange={handleEditInputChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                        placeholder="e.g., R1-25-26, F12345, or B67890"
-                      />
-                      <p className="mt-1 text-xs text-gray-500">
-                        {getContextType(editForm.contextValue)}
-                      </p>
                     </div>
                     
                     {/* Date */}
@@ -2514,9 +2539,7 @@ const Cashier = () => {
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       />
                     </div>
-                  </div>
-                  
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    
                     {/* Guest Name */}
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -2530,7 +2553,51 @@ const Cashier = () => {
                         className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                       />
                     </div>
+                  </div>
+                  
+                  {/* Context Information Display */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {/* Reservation Number */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Reservation Number
+                      </label>
+                      <input
+                        type="text"
+                        value={editingAdvance?.reservationNo || 'N/A'}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100 text-gray-700 focus:outline-none"
+                        readOnly
+                      />
+                    </div>
                     
+                    {/* Bill Number */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Bill Number
+                      </label>
+                      <input
+                        type="text"
+                        value={editingAdvance?.billNo || 'N/A'}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100 text-gray-700 focus:outline-none"
+                        readOnly
+                      />
+                    </div>
+                    
+                    {/* Room Number */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Room Number
+                      </label>
+                      <input
+                        type="text"
+                        value={editingAdvance?.folioNo ? getRoomNoByFolio(editingAdvance.folioNo) : 'N/A'}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-100 text-gray-700 focus:outline-none"
+                        readOnly
+                      />
+                    </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {/* Mode of Payment */}
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -2550,6 +2617,9 @@ const Cashier = () => {
                         ))}
                       </select>
                     </div>
+                    
+                    {/* Empty column for spacing */}
+                    <div></div>
                   </div>
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -2735,73 +2805,79 @@ const Cashier = () => {
                         
                         return (
                           <>
-                            <div className="overflow-x-auto">
-                              <table className="w-full border border-gray-200">
-                                <thead className="bg-gray-50">
+                            <div className="overflow-x-auto rounded-lg shadow">
+                              <table className="min-w-full divide-y divide-gray-200">
+                                <thead className="bg-gradient-to-r from-blue-500 to-indigo-600">
                                   <tr>
-                                    <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">Receipt No</th>
-                                    <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">Date</th>
-                                    <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">Guest Name</th>
-                                    <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">Context</th>
-                                    <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">Room No</th>
-                                    <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">Amount</th>
-                                    <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">Payment Mode</th>
-                                    <th className="px-4 py-2 text-left text-sm font-medium text-gray-700">Actions</th>
+                                    <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Receipt No</th>
+                                    <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Date</th>
+                                    <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Guest Name</th>
+                                    <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Reservation No</th>
+                                    <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Bill No</th>
+                                    <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Room No</th>
+                                    <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Amount</th>
+                                    <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Payment Mode</th>
+                                    <th className="px-4 py-3 text-left text-xs font-medium text-white uppercase tracking-wider">Actions</th>
                                   </tr>
                                 </thead>
-                                <tbody>
+                                <tbody className="bg-white divide-y divide-gray-200">
                                   {currentAdvances.length > 0 ? (
-                                    currentAdvances.map((advance: Advance) => (
-                                      <tr key={advance.advanceId} className="border-b border-gray-200">
-                                        <td className="px-4 py-2 text-sm text-gray-700">{advance.receiptNo}</td>
-                                        <td className="px-4 py-2 text-sm text-gray-700">{advance.date?.split('T')[0]}</td>
-                                        <td className="px-4 py-2 text-sm text-gray-700">{advance.guestName}</td>
-                                        <td className="px-4 py-2 text-sm text-gray-700">
-                                          {advance.reservationNo ? `R: ${advance.reservationNo}` : 
-                                           advance.folioNo ? `F: ${advance.folioNo}` : 
-                                           advance.billNo ? `B: ${advance.billNo}` : 'N/A'}
-                                        </td>
-                                        <td className="px-4 py-2 text-sm text-gray-700">
+                                    currentAdvances.map((advance: Advance, index) => (
+                                      <tr key={advance.advanceId} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                                        <td className="px-4 py-3 text-sm text-gray-900 font-medium">{advance.receiptNo}</td>
+                                        <td className="px-4 py-3 text-sm text-gray-700">{advance.date?.split('T')[0] || 'N/A'}</td>
+                                        <td className="px-4 py-3 text-sm text-gray-700">{advance.guestName}</td>
+                                        <td className="px-4 py-3 text-sm text-gray-700">{advance.reservationNo || 'N/A'}</td>
+                                        <td className="px-4 py-3 text-sm text-gray-700">{advance.billNo || 'N/A'}</td>
+                                        <td className="px-4 py-3 text-sm text-gray-700">
                                           {advance.folioNo ? getRoomNoByFolio(advance.folioNo) : 'N/A'}
                                         </td>
-                                        <td className="px-4 py-2 text-sm text-gray-700">₹{advance.amount?.toFixed(2) || '0.00'}</td>
-                                        <td className="px-4 py-2 text-sm text-gray-700">
+                                        <td className="px-4 py-3 text-sm text-gray-900 font-medium">₹{advance.amount?.toFixed(2) || '0.00'}</td>
+                                        <td className="px-4 py-3 text-sm text-gray-700">
                                           {advance.modeOfPaymentName || advance.modeOfPaymentId || 'N/A'}
                                         </td>
-                                        <td className="px-4 py-2 text-sm text-gray-700">
-                                          {/* */}
-                                          <button
-                                            type="button"
-                                            onClick={() => {
-                                              console.log('Editing advance:', advance);
-                                              handleEditAdvance(advance);
-                                            }}
-                                            className="px-2 py-1 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
-                                          >
-                                            Edit
-                                          </button>
-                                          <button
-                                            type="button"
-                                            onClick={() => {
-                                              if (advance.receiptNo) {
-                                                console.log('Deleting advance with ID:', advance.advanceId);
-                                                handleDeleteAdvance( advance.receiptNo);
-                                              } else {
-                                                console.error('Cannot delete advance: No advanceId found', advance);
-                                                showNotification('Cannot delete advance: Invalid data', false);
-                                              }
-                                            }}
-                                            className="ml-2 px-2 py-1 bg-red-600 text-white rounded-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
-                                          >
-                                            Delete
-                                          </button>
+                                        <td className="px-4 py-3 text-sm text-gray-700">
+                                          <div className="flex space-x-2">
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                console.log('Editing advance:', advance);
+                                                handleEditAdvance(advance);
+                                              }}
+                                              className="px-3 py-1 bg-indigo-600 text-white text-xs font-medium rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-colors duration-200"
+                                            >
+                                              Edit
+                                            </button>
+                                            <button
+                                              type="button"
+                                              onClick={() => {
+                                                if (advance.receiptNo) {
+                                                  console.log('Deleting advance with ID:', advance.advanceId);
+                                                  handleDeleteAdvance(advance.receiptNo);
+                                                } else {
+                                                  console.error('Cannot delete advance: No receiptNo found', advance);
+                                                  showNotification('Cannot delete advance: Invalid data', false);
+                                                }
+                                              }}
+                                              className="px-3 py-1 bg-red-600 text-white text-xs font-medium rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 transition-colors duration-200"
+                                            >
+                                              Delete
+                                            </button>
+                                          </div>
                                         </td>
                                       </tr>
                                     ))
                                   ) : (
                                     <tr>
-                                      <td className="px-4 py-2 text-sm text-gray-700" colSpan={8}>
-                                        {searchTerm ? 'No advances found matching your search criteria.' : 'No advances found.'}
+                                      <td className="px-4 py-6 text-center text-sm text-gray-700" colSpan={9}>
+                                        <div className="flex flex-col items-center justify-center py-8">
+                                          <svg className="w-12 h-12 text-gray-400 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                                          </svg>
+                                          <p className="text-gray-500 text-base">
+                                            {searchTerm ? 'No advances found matching your search criteria.' : 'No advances found.'}
+                                          </p>
+                                        </div>
                                       </td>
                                     </tr>
                                   )}
@@ -2920,14 +2996,29 @@ const Cashier = () => {
                       <label className="block text-sm font-medium text-gray-700 mb-2">
                         Bill Number
                       </label>
-                      <input
-                        type="text"
-                        name="billNo"
-                        value={reprintData.billNo}
-                        onChange={handleReprintInputChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                        required
-                      />
+                      <div className="flex space-x-2">
+                        <input
+                          type="text"
+                          name="billNo"
+                          value={reprintData.billNo}
+                          onChange={handleReprintInputChange}
+                          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                          required
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            fetchAvailableBills();
+                            setShowBillsHelp(true);
+                          }}
+                          className="px-3 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
+                          title="Select from available bills"
+                        >
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 16l2.879-2.879m0 0a3 3 0 104.243-4.242 3 3 0 00-4.243 4.242zM21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                          </svg>
+                        </button>
+                      </div>
                     </div>
                   </div>
                   <div className="flex justify-end">
@@ -2939,6 +3030,87 @@ const Cashier = () => {
                     </button>
                   </div>
                 </form>
+                
+                {/* Bills Help Modal */}
+                {showBillsHelp && (
+                  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                    <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[80vh] overflow-hidden">
+                      <div className="p-4 border-b border-gray-200 flex justify-between items-center">
+                        <h3 className="text-lg font-medium text-gray-900">Select Bill to Reprint</h3>
+                        <button
+                          onClick={() => setShowBillsHelp(false)}
+                          className="text-gray-400 hover:text-gray-500"
+                        >
+                          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path>
+                          </svg>
+                        </button>
+                      </div>
+                      <div className="p-4 overflow-y-auto max-h-[60vh]">
+                        {billsLoading ? (
+                          <div className="flex justify-center items-center h-48">
+                            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-600"></div>
+                          </div>
+                        ) : (
+                          <>
+                            {availableBills.length > 0 ? (
+                              <div className="overflow-x-auto">
+                                <table className="min-w-full divide-y divide-gray-200">
+                                  <thead className="bg-gray-50">
+                                    <tr>
+                                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Bill Number</th>
+                                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Guest Name</th>
+                                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Bill Date</th>
+                                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
+                                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody className="bg-white divide-y divide-gray-200">
+                                    {availableBills.map((bill, index) => (
+                                      <tr key={bill.billNo} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                                        <td className="px-4 py-3 text-sm text-gray-900 font-medium">{bill.billNo}</td>
+                                        <td className="px-4 py-3 text-sm text-gray-700">{bill.guestName}</td>
+                                        <td className="px-4 py-3 text-sm text-gray-700">{bill.generatedAt ? new Date(bill.generatedAt).toLocaleDateString() : 'N/A'}</td>
+                                        <td className="px-4 py-3 text-sm text-gray-900 font-medium">₹{bill.totalAmount?.toFixed(2) || '0.00'}</td>
+                                        <td className="px-4 py-3 text-sm text-gray-700">
+                                          <button
+                                            onClick={() => {
+                                              setReprintData({ billNo: bill.billNo });
+                                              setShowBillsHelp(false);
+                                            }}
+                                            className="px-3 py-1 bg-indigo-600 text-white text-xs font-medium rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                                          >
+                                            Select
+                                          </button>
+                                        </td>
+                                      </tr>
+                                    ))}
+                                  </tbody>
+                                </table>
+                              </div>
+                            ) : (
+                              <div className="text-center py-8">
+                                <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                                </svg>
+                                <h3 className="mt-2 text-sm font-medium text-gray-900">No bills found</h3>
+                                <p className="mt-1 text-sm text-gray-500">There are no available bills to reprint.</p>
+                              </div>
+                            )}
+                          </>
+                        )}
+                      </div>
+                      <div className="p-4 border-t border-gray-200 flex justify-end">
+                        <button
+                          onClick={() => setShowBillsHelp(false)}
+                          className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
+                        >
+                          Close
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
               </>
             )}
             {activeTab === 'expenses' && (
@@ -2952,104 +3124,238 @@ const Cashier = () => {
               </>
             )}
             {activeTab === 'settlement' && (
-              <>
-                <div className="p-6 border-b border-gray-200">
-                  <h2 className="text-xl font-semibold text-gray-900">Settlement Entry</h2>
+    <>
+      <div className="p-6 border-b border-gray-200">
+        <h2 className="text-xl font-semibold text-gray-900">Settlement Entry</h2>
+      </div>
+      <form onSubmit={handleSettlementEntry} className="p-6 space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Bill Number */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Bill Number
+            </label>
+            <div className="flex space-x-2">
+              <input
+                type="text"
+                name="billNo"
+                value={settlementData.billNo}
+                onChange={handleSettlementInputChange}
+                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                required
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  fetchAvailableSettlementBills();
+                  setShowSettlementBillsHelp(true);
+                }}
+                className="px-3 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
+                title="Select from available bills"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 16l2.879-2.879m0 0a3 3 0 104.243-4.242 3 3 0 00-4.243 4.242zM21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                </svg>
+              </button>
+            </div>
+          </div>
+          {/* Guest Name */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Guest Name
+            </label>
+            <input
+              type="text"
+              name="guestName"
+              value={settlementData.guestName}
+              onChange={handleSettlementInputChange}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+              readOnly
+            />
+          </div>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Settlement Type */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Settlement Type
+            </label>
+            <select
+              name="settlementTypeId"
+              value={settlementData.settlementTypeId}
+              onChange={handleSettlementInputChange}
+              required
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+              <option value="">Select settlement type</option>
+              {settlementTypes.map(type => (
+                <option key={type.id} value={type.id}>
+                  {type.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          {/* Amount */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Amount
+            </label>
+            <input
+              type="number"
+              name="amount"
+              value={settlementData.amount}
+              onChange={handleSettlementInputChange}
+              min="0"
+              step="0.01"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              required
+            />
+          </div>
+        </div>
+        {/* Refund Information */}
+        {settlementData.isRefund && settlementData.refundAmount > 0 && (
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+            <div className="flex items-center">
+              <svg className="h-5 w-5 text-yellow-400 mr-2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+              </svg>
+              <h3 className="text-sm font-medium text-yellow-800">Refund Required</h3>
+            </div>
+            <div className="mt-2 text-sm text-yellow-700">
+              <p>Advance amount exceeds charges by ₹{settlementData.refundAmount.toFixed(2)}. A refund voucher will be generated.</p>
+            </div>
+          </div>
+        )}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Remarks */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Remarks
+            </label>
+            <textarea
+              name="remarks"
+              value={settlementData.remarks}
+              onChange={handleSettlementInputChange}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              rows={3}
+            />
+          </div>
+        </div>
+        <div className="flex justify-end">
+          <button
+            type="submit"
+            className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+          >
+            {loading ? 'Processing...' : 'Record Settlement'}
+          </button>
+        </div>
+      </form>
+      
+      {/* Bills Help Modal for Settlement */}
+      {showSettlementBillsHelp && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[80vh] overflow-hidden">
+            <div className="p-4 border-b border-gray-200 flex justify-between items-center">
+              <h3 className="text-lg font-medium text-gray-900">Select Bill for Settlement</h3>
+              <button
+                onClick={() => setShowSettlementBillsHelp(false)}
+                className="text-gray-400 hover:text-gray-500"
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+              </button>
+            </div>
+            <div className="p-4 overflow-y-auto max-h-[60vh]">
+              {settlementBillsLoading ? (
+                <div className="flex justify-center items-center h-48">
+                  <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-600"></div>
                 </div>
-                <form onSubmit={handleSettlementEntry} className="p-6 space-y-6">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {/* Folio Number */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Folio Number
-                      </label>
-                      <input
-                        type="text"
-                        name="folioNo"
-                        value={settlementData.folioNo}
-                        onChange={handleSettlementInputChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                        required
-                      />
+              ) : (
+                <>
+                  {availableSettlementBills.length > 0 ? (
+                    <div className="overflow-x-auto">
+                      <table className="min-w-full divide-y divide-gray-200">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Bill Number</th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Guest Name</th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total Amount</th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Advance Amount</th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amount Due</th>
+                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody className="bg-white divide-y divide-gray-200">
+                          {availableSettlementBills.map((bill, index) => {
+                            const totalAmount = bill.totalAmount || 0;
+                            const advanceAmount = bill.advanceAmount || 0;
+                            const amountDue = Math.max(0, totalAmount - advanceAmount);
+                            const isRefund = advanceAmount > totalAmount;
+                            const refundAmount = isRefund ? advanceAmount - totalAmount : 0;
+                            
+                            return (
+                              <tr key={bill.billNo} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                                <td className="px-4 py-3 text-sm text-gray-900 font-medium">{bill.billNo}</td>
+                                <td className="px-4 py-3 text-sm text-gray-700">{bill.guestName}</td>
+                                <td className="px-4 py-3 text-sm text-gray-900 font-medium">₹{totalAmount.toFixed(2)}</td>
+                                <td className="px-4 py-3 text-sm text-gray-900 font-medium">₹{advanceAmount.toFixed(2)}</td>
+                                <td className="px-4 py-3 text-sm text-gray-900 font-medium">
+                                  {isRefund ? (
+                                    <span className="text-red-600">Refund: ₹{refundAmount.toFixed(2)}</span>
+                                  ) : (
+                                    `₹${amountDue.toFixed(2)}`
+                                  )}
+                                </td>
+                                <td className="px-4 py-3 text-sm text-gray-700">
+                                  <button
+                                    onClick={() => {
+                                      setSettlementData(prev => ({
+                                        ...prev,
+                                        billNo: bill.billNo,
+                                        guestName: bill.guestName,
+                                        amount: amountDue,
+                                        isRefund: isRefund,
+                                        refundAmount: refundAmount
+                                      }));
+                                      setShowSettlementBillsHelp(false);
+                                    }}
+                                    className="px-3 py-1 bg-indigo-600 text-white text-xs font-medium rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                                  >
+                                    Select
+                                  </button>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
                     </div>
-                    {/* Guest Name */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Guest Name
-                      </label>
-                      <input
-                        type="text"
-                        name="guestName"
-                        value={settlementData.guestName}
-                        onChange={handleSettlementInputChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                        required
-                      />
+                  ) : (
+                    <div className="text-center py-8">
+                      <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                      </svg>
+                      <h3 className="mt-2 text-sm font-medium text-gray-900">No bills found</h3>
+                      <p className="mt-1 text-sm text-gray-500">There are no available bills for settlement.</p>
                     </div>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {/* Settlement Type */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Settlement Type
-                      </label>
-                      <select
-                        name="settlementTypeId"
-                        value={settlementData.settlementTypeId}
-                        onChange={handleSettlementInputChange}
-                        required
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      >
-                        <option value="">Select settlement type</option>
-                        {settlementTypes.map(type => (
-                          <option key={type.id} value={type.id}>
-                            {type.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                    {/* Amount */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Amount
-                      </label>
-                      <input
-                        type="number"
-                        name="amount"
-                        value={settlementData.amount}
-                        onChange={handleSettlementInputChange}
-                        min="0"
-                        step="0.01"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        required
-                      />
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {/* Remarks */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Remarks
-                      </label>
-                      <textarea
-                        name="remarks"
-                        value={settlementData.remarks}
-                        onChange={handleSettlementInputChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                      />
-                    </div>
-                  </div>
-                  <div className="flex justify-end">
-                    <button
-                      type="submit"
-                      className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
-                    >
-                      {loading ? 'Processing...' : 'Record Settlement'}
-                    </button>
-                  </div>
-                </form>
-              </>
-            )}
+                  )}
+                </>
+              )}
+            </div>
+            <div className="p-4 border-t border-gray-200 flex justify-end">
+              <button
+                onClick={() => setShowSettlementBillsHelp(false)}
+                className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  )}
             {activeTab === 'sales' && (
               <>
                 <div className="p-6 border-b border-gray-200">

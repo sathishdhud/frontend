@@ -129,7 +129,7 @@ const BillGeneration: React.FC = () => {
       const allReservationsRes = await reservationApi.getReservations();
       console.log('All reservations result:', allReservationsRes.data);
       
-      if (allReservationsRes.data.success && allReservationsRes.data.data.length > 0) {
+      if (allReservationsRes.data.success && allReservationsRes.data.data && allReservationsRes.data.data.length > 0) {
         const exactMatch = allReservationsRes.data.data.find((r: Reservation) => r.reservationNo === reservationNo);
         if (exactMatch) {
           console.log('Found exact match in all reservations:', exactMatch);
@@ -296,7 +296,7 @@ const BillGeneration: React.FC = () => {
       const allCheckInsRes = await checkInApi.searchCheckIns('');
       console.log('All check-ins result:', allCheckInsRes.data);
       
-      if (allCheckInsRes.data.success && allCheckInsRes.data.data.length > 0) {
+      if (allCheckInsRes.data.success && allCheckInsRes.data.data && allCheckInsRes.data.data.length > 0) {
         const exactMatch = allCheckInsRes.data.data.find((c: CheckIn) => c.folioNo === folioNo);
         if (exactMatch) {
           console.log('Found exact match in all check-ins search:', exactMatch);
@@ -1482,12 +1482,14 @@ const BillGeneration: React.FC = () => {
           console.log('Room status updated to VD (Vacant Dirty)');
         }
         
-        // Update the check-in record with checkout date
+        // Update the check-in record with checkout status and bill number
         const checkoutDate = new Date().toISOString();
         await checkInApi.updateCheckIn(billData.folioNo, {
-          departureDate: checkoutDate
+          departureDate: checkoutDate,
+          checkout: true, // Mark as checked out
+          billNo: billData.billNo // Add bill number to identify checked out records
         });
-        console.log('Check-in record updated with checkout date');
+        console.log('Check-in record updated with checkout status and bill number');
       }
     } catch (error) {
       console.error('Error during checkout process:', error);

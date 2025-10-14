@@ -98,6 +98,7 @@ export interface CheckIn {
   includingGst?: 'Y' | 'N';
   noOfPersons?: number;
   checkout?: boolean;
+  billNo?: string; // Added bill number to identify checked out records
   // Enhanced fields as per API documentation
   idProof1?: string;
   idProof2?: string;
@@ -303,6 +304,13 @@ export interface Expense {
   shiftNo: string;
   shiftDate: string;
   createdAt?: string;
+  // New fields for enhanced expense tracking
+  roomNo?: string;
+  folioNo?: string;
+  billNo?: string;
+  guestName?: string;
+  roomId?: string;
+  auditDate?: string;
 }
 
 // Sales Receipt interface

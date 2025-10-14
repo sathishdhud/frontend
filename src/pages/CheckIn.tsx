@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ArrowsRightLeftIcon, CheckCircleIcon } from '@heroicons/react/24/outline';
-import { CheckIn as CheckInType, Room, Advance, RoomType, Company, PlanType, SettlementType, ArrivalMode, Nationality, RefMode, ReservationSource } from '../types/api';
+import { CheckIn as CheckInType, Room, Advance, RoomType, Company, PlanType, SettlementType, ArrivalMode, Nationality, RefMode, ReservationSource, Reservation } from '../types/api';
 import { checkInApi, roomApi, advanceApi, reservationApi, masterDataApi } from '../services/api';
 import Layout from '../components/Layout/Layout';
 import Modal from '../components/Modal';
@@ -38,9 +38,12 @@ const CheckIn: React.FC = () => {
 
   // Add state for in-house guests
   const [inHouseGuests, setInHouseGuests] = useState<CheckInType[]>([]);
+  const [checkedOutGuests, setCheckedOutGuests] = useState<CheckInType[]>([]);
   const [filteredGuests, setFilteredGuests] = useState<CheckInType[]>([]);
   const [editingCheckIn, setEditingCheckIn] = useState<CheckInType | null>(null);
   const [searchLoading, setSearchLoading] = useState(false);
+  // Add state for manage check-ins tabs
+  const [manageCheckInsTab, setManageCheckInsTab] = useState<'inhouse' | 'checkedout'>('inhouse');
 
   // Modal states
   const [modalOpen, setModalOpen] = useState(false);
@@ -53,8 +56,47 @@ const CheckIn: React.FC = () => {
   const [confirmText, setConfirmText] = useState('Confirm');
   const [cancelText, setCancelText] = useState('Cancel');
 
+  // Add reservation selection modal state
+  const [reservationModalOpen, setReservationModalOpen] = useState(false);
+  const [reservations, setReservations] = useState<Reservation[]>([]);
+  const [filteredReservations, setFilteredReservations] = useState<Reservation[]>([]);
+  const [reservationsLoading, setReservationsLoading] = useState(false);
+  const [reservationSearchTerm, setReservationSearchTerm] = useState('');
+
   // Add a ref for debouncing
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // Filter reservations based on search term
+  useEffect(() => {
+    if (!reservationSearchTerm) {
+      setFilteredReservations(reservations);
+      return;
+    }
+    
+    // Debounce search to avoid excessive filtering
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current);
+    }
+    
+    debounceRef.current = setTimeout(() => {
+      const term = reservationSearchTerm.toLowerCase();
+      const filtered = reservations.filter(reservation => 
+        reservation.reservationNo.toLowerCase().includes(term) ||
+        reservation.guestName.toLowerCase().includes(term) ||
+        new Date(reservation.arrivalDate).toLocaleDateString('en-GB').includes(term) ||
+        new Date(reservation.departureDate).toLocaleDateString('en-GB').includes(term) ||
+        (reservation.mobileNumber && reservation.mobileNumber.includes(term))
+      );
+      
+      setFilteredReservations(filtered);
+    }, 300);
+    
+    return () => {
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current);
+      }
+    };
+  }, [reservationSearchTerm, reservations]);
 
   const [formData, setFormData] = useState({
     reservationNo: '',
@@ -131,16 +173,111 @@ const CheckIn: React.FC = () => {
     }, 5000);
   };
 
-  // Add function to fetch in-house guests
+  // Add function to fetch all reservations
+  const fetchAllReservations = async () => {
+    setReservationsLoading(true);
+    try {
+      const response = await reservationApi.getReservations();
+      if (response.data.success) {
+        // Filter out reservations that have already been fully checked in
+        const availableReservations = response.data.data.filter((reservation: Reservation) => {
+          const roomsCheckedIn = reservation.roomsCheckedIn || 0;
+          const noOfRooms = reservation.noOfRooms || 0;
+          return roomsCheckedIn < noOfRooms;
+        });
+        // Sort reservations by arrival date (closest first)
+        const sortedReservations = availableReservations.sort((a: Reservation, b: Reservation) => {
+          return new Date(a.arrivalDate).getTime() - new Date(b.arrivalDate).getTime();
+        });
+        setReservations(sortedReservations);
+        setFilteredReservations(sortedReservations);
+        setReservationSearchTerm('');
+      }
+    } catch (error) {
+      showNotification('Failed to fetch reservations. Please try again.', false);
+    } finally {
+      setReservationsLoading(false);
+    }
+  };
+
+  // Add function to handle reservation selection
+  const handleSelectReservation = (reservation: Reservation) => {
+    // Check if reservation still has rooms available
+    const roomsCheckedIn = reservation.roomsCheckedIn || 0;
+    const noOfRooms = reservation.noOfRooms || 0;
+    const remainingRooms = noOfRooms - roomsCheckedIn;
+    
+    if (remainingRooms <= 0) {
+      showNotification('All rooms for this reservation have already been checked in.', false);
+      return;
+    }
+    
+    setFormData(prev => ({
+      ...prev,
+      reservationNo: reservation.reservationNo,
+      guestName: reservation.guestName,
+      arrivalDate: reservation.arrivalDate || '',
+      departureDate: reservation.departureDate || '',
+      noOfDays: 1,
+      noOfPersons: reservation.noOfPersons || 1,
+      mobileNumber: reservation.mobileNumber || '',
+      rate: reservation.rate || 0,
+      includingGst: (reservation.includingGst || 'N') as 'Y' | 'N',
+      remarks: reservation.remarks || '',
+      // Additional details from reservation
+      emailId: reservation.emailId || '',
+      idProof1: reservation.idProof1 || '',
+      idProof2: reservation.idProof2 || '',
+      idProof3: reservation.idProof3 || '',
+      companyId: reservation.companyId || '',
+      planId: reservation.planId || '',
+      roomTypeId: reservation.roomTypeId || '',
+      settlementTypeId: reservation.settlementTypeId || '',
+      arrivalModeId: reservation.arrivalModeId || '',
+      arrivalDetails: reservation.arrivalDetails || '',
+      nationalityId: reservation.nationalityId || '',
+      refModeId: reservation.refModeId || '',
+      resvSourceId: (reservation as any).resvSourceId || reservation.reservationSourceId || ''
+    }));
+    
+    setReservationInfo(reservation);
+    setReservationModalOpen(false);
+    setIsWalkIn(false); // Ensure we're not in walk-in mode
+  };
+
+  // Add function to fetch in-house guests (not checked out)
   const fetchInHouseGuests = async () => {
     try {
       const response = await checkInApi.getInHouseGuests();
       if (response.data.success) {
-        setInHouseGuests(response.data.data);
-        setFilteredGuests(response.data.data); // Initialize filtered guests
+        // Filter out checked out guests
+        const inHouseOnly = response.data.data.filter(guest => !guest.checkout);
+        setInHouseGuests(inHouseOnly);
+        // If we're currently viewing in-house guests, update filtered guests
+        if (manageCheckInsTab === 'inhouse') {
+          setFilteredGuests(inHouseOnly);
+        }
       }
     } catch (error) {
       showNotification('Failed to fetch in-house guests. Please try again.', false);
+    }
+  };
+
+  // Add function to fetch checked-out guests
+  const fetchCheckedOutGuests = async () => {
+    try {
+      const response = await checkInApi.getInHouseGuests();
+      if (response.data.success) {
+        // Filter to only checked out guests
+        const checkedOutOnly = response.data.data.filter(guest => guest.checkout);
+        setCheckedOutGuests(checkedOutOnly);
+        // If we're currently viewing checked-out guests, update filtered guests
+        if (manageCheckInsTab === 'checkedout') {
+          setFilteredGuests(checkedOutOnly);
+        }
+      }
+    } catch (error) {
+      showNotification('Failed to fetch checked-out guests. Please try again.', false);
     }
   };
 
@@ -157,20 +294,39 @@ const CheckIn: React.FC = () => {
     // Set new timeout
     debounceRef.current = setTimeout(async () => {
       if (!searchTerm.trim()) {
-        setFilteredGuests(inHouseGuests); // Show all if search is empty
+        // Show all guests based on current tab
+        if (manageCheckInsTab === 'inhouse') {
+          setFilteredGuests(inHouseGuests);
+        } else {
+          setFilteredGuests(checkedOutGuests);
+        }
         setSearchLoading(false);
         return;
       }
       
+      // Filter guests by room number locally
       try {
-        const response = await checkInApi.searchCheckIns(searchTerm);
-        if (response.data.success) {
-          setFilteredGuests(response.data.data);
-        }
+        let filteredGuestsList: CheckInType[] = [];
+        
+        // Get the appropriate guest list based on current tab
+        const currentGuests = manageCheckInsTab === 'inhouse' ? inHouseGuests : checkedOutGuests;
+        
+        // Filter by room number
+        filteredGuestsList = currentGuests.filter(guest => {
+          const roomNo = getRoomNoByIdWithFallback(guest.roomId, guest.roomNo);
+          return roomNo.toLowerCase().includes(searchTerm.toLowerCase());
+        });
+        
+        setFilteredGuests(filteredGuestsList);
       } catch (error) {
         console.error('Search failed:', error);
         showNotification('Search failed. Showing all guests.', false);
-        setFilteredGuests(inHouseGuests);
+        // Show all guests based on current tab
+        if (manageCheckInsTab === 'inhouse') {
+          setFilteredGuests(inHouseGuests);
+        } else {
+          setFilteredGuests(checkedOutGuests);
+        }
       } finally {
         setSearchLoading(false);
       }
@@ -365,8 +521,9 @@ const CheckIn: React.FC = () => {
     if (formData.reservationNo) {
       fetchAdvances();
     }
-    // Fetch in-house guests when component mounts
+    // Fetch in-house guests and checked-out guests when component mounts
     fetchInHouseGuests();
+    fetchCheckedOutGuests();
   }, [formData.reservationNo]);
 
   // Fetch available rooms when editing check-in
@@ -869,6 +1026,8 @@ const CheckIn: React.FC = () => {
     });
     setAdvances([]);
     setReservationInfo(null);
+    // Reset walk-in state to false
+    setIsWalkIn(false);
     // Clear any pending debounced calls
     if (debounceRef.current) {
       clearTimeout(debounceRef.current);
@@ -1044,19 +1203,35 @@ const CheckIn: React.FC = () => {
                       <label className="block text-xs font-medium text-gray-700 mb-1">
                         Reservation Number
                       </label>
-                      <div className="relative">
-                        <input
-                          type="text"
-                          name="reservationNo"
-                          value={formData.reservationNo}
-                          onChange={handleInputChange}
-                          className="w-full px-2 py-1.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-xs"
-                        />
-                        {autoFillLoading && (
-                          <div className="absolute inset-y-0 right-0 flex items-center pr-3">
-                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
-                          </div>
-                        )}
+                      <div className="flex space-x-2">
+                        <div className="relative flex-1">
+                          <input
+                            type="text"
+                            name="reservationNo"
+                            value={formData.reservationNo}
+                            onChange={handleInputChange}
+                            className="w-full px-2 py-1.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-xs"
+                            placeholder="Enter reservation number or select from list"
+                          />
+                          {autoFillLoading && (
+                            <div className="absolute inset-y-0 right-0 flex items-center pr-3">
+                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                            </div>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setReservationModalOpen(true);
+                            fetchAllReservations();
+                          }}
+                          className="px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-xs font-medium flex items-center"
+                        >
+                          <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>
+                          </svg>
+                          Select
+                        </button>
                       </div>
                       {/* Auto-fill loading message */}
                       {autoFillLoading && (
@@ -1431,13 +1606,59 @@ const CheckIn: React.FC = () => {
               Edit existing check-in records
             </p>
           </div>
+          
+          {/* Tabs for in-house and checked-out guests */}
+          <div className="flex border-b border-gray-200 bg-gray-50">
+            <button
+              type="button"
+              onClick={() => {
+                setManageCheckInsTab('inhouse');
+                setFilteredGuests(inHouseGuests);
+              }}
+              className={`px-4 py-3 text-xs font-medium flex-1 text-center transition-colors ${
+                manageCheckInsTab === 'inhouse'
+                  ? 'border-b-2 border-blue-600 text-blue-600 bg-white'
+                  : 'text-gray-600 hover:text-gray-800 hover:bg-gray-100'
+              }`}
+            >
+              <div className="flex items-center justify-center">
+                <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"></path>
+                </svg>
+                In-House Guests
+              </div>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setManageCheckInsTab('checkedout');
+                setFilteredGuests(checkedOutGuests);
+                // Fetch checked-out guests if not already fetched
+                if (checkedOutGuests.length === 0) {
+                  fetchCheckedOutGuests();
+                }
+              }}
+              className={`px-4 py-3 text-xs font-medium flex-1 text-center transition-colors ${
+                manageCheckInsTab === 'checkedout'
+                  ? 'border-b-2 border-blue-600 text-blue-600 bg-white'
+                  : 'text-gray-600 hover:text-gray-800 hover:bg-gray-100'
+              }`}
+            >
+              <div className="flex items-center justify-center">
+                <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path>
+                </svg>
+                Checked Out Guests
+              </div>
+            </button>
+          </div>
 
           <div className="p-4">
             <div className="flex justify-between items-center mb-4">
               <div className="relative w-64">
                 <input
                   type="text"
-                  placeholder="Search check-ins..."
+                  placeholder="Search by room number..."
                   className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
                   onChange={(e) => {
                     searchCheckIns(e.target.value);
@@ -1461,6 +1682,7 @@ const CheckIn: React.FC = () => {
                     searchInput.value = '';
                   }
                   fetchInHouseGuests();
+                  fetchCheckedOutGuests();
                 }}
                 className="flex items-center space-x-1 px-3 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors"
               >
@@ -1480,6 +1702,9 @@ const CheckIn: React.FC = () => {
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Room</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Arrival Date</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Departure Date</th>
+                    {manageCheckInsTab === 'checkedout' && (
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Checkout Date</th>
+                    )}
                     <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                   </tr>
                 </thead>
@@ -1494,6 +1719,9 @@ const CheckIn: React.FC = () => {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(checkIn.arrivalDate).toLocaleDateString()}</td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(checkIn.departureDate).toLocaleDateString()}</td>
+                        {manageCheckInsTab === 'checkedout' && (
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{checkIn.auditDate ? new Date(checkIn.auditDate).toLocaleDateString() : 'N/A'}</td>
+                        )}
                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                           <button
                             onClick={() => handleEditCheckIn(checkIn)}
@@ -1508,8 +1736,8 @@ const CheckIn: React.FC = () => {
                     ))
                   ) : (
                     <tr>
-                      <td colSpan={6} className="px-6 py-4 text-center text-sm text-gray-500">
-                        No in-house guests found
+                      <td colSpan={manageCheckInsTab === 'inhouse' ? 6 : 7} className="px-6 py-4 text-center text-sm text-gray-500">
+                        {manageCheckInsTab === 'inhouse' ? 'No in-house guests found' : 'No checked-out guests found'}
                       </td>
                     </tr>
                   )}
@@ -1519,6 +1747,126 @@ const CheckIn: React.FC = () => {
           </div>
         </div>
       </div>
+      
+      {/* Reservation Selection Modal */}
+      {reservationModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] flex flex-col">
+            <div className="px-4 py-3 border-b border-gray-200 flex justify-between items-center">
+              <h3 className="text-lg font-semibold text-gray-900">Select Reservation</h3>
+              <button
+                onClick={() => setReservationModalOpen(false)}
+                className="text-gray-400 hover:text-gray-500"
+              >
+                <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+              </button>
+            </div>
+            
+            <div className="p-4 border-b border-gray-200 bg-gray-50">
+              <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                <div className="relative flex-1">
+                  <input
+                    type="text"
+                    placeholder="Search by reservation number, guest name, or dates..."
+                    className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                    value={reservationSearchTerm}
+                    onChange={(e) => setReservationSearchTerm(e.target.value)}
+                  />
+                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                    </svg>
+                  </div>
+                </div>
+                <div className="text-sm text-gray-600">
+                  Showing {filteredReservations.length} of {reservations.length} reservations
+                </div>
+              </div>
+              {reservationSearchTerm && (
+                <div className="mt-2 text-xs text-gray-500">
+                  Search results for: "{reservationSearchTerm}"
+                </div>
+              )}
+            </div>
+            
+            <div className="flex-1 overflow-y-auto p-4">
+              {reservationsLoading ? (
+                <div className="flex justify-center items-center h-64">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+                </div>
+              ) : filteredReservations.length > 0 ? (
+                <div className="overflow-x-auto">
+                  <table className="min-w-full divide-y divide-gray-200">
+                    <thead className="bg-gray-50 sticky top-0">
+                      <tr>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Reservation No</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Guest Name</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Arrival Date</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Departure Date</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Rooms</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white divide-y divide-gray-200">
+                      {filteredReservations.map((reservation) => {
+                        const roomsCheckedIn = reservation.roomsCheckedIn || 0;
+                        const noOfRooms = reservation.noOfRooms || 0;
+                        const remainingRooms = noOfRooms - roomsCheckedIn;
+                        
+                        return (
+                          <tr key={reservation.reservationNo} className="hover:bg-gray-50">
+                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{reservation.reservationNo}</td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{reservation.guestName}</td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(reservation.arrivalDate).toLocaleDateString('en-GB')}</td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(reservation.departureDate).toLocaleDateString('en-GB')}</td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                              {noOfRooms} ({roomsCheckedIn} checked in)
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                              <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${remainingRooms > 0 ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
+                                {remainingRooms > 0 ? `${remainingRooms} available` : 'Full'}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                              <button
+                                onClick={() => handleSelectReservation(reservation)}
+                                disabled={remainingRooms <= 0}
+                                className={`px-3 py-1 rounded-md text-xs ${remainingRooms > 0 ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-gray-300 text-gray-500 cursor-not-allowed'}`}
+                              >
+                                Select
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="text-center py-8">
+                  <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                  </svg>
+                  <p className="mt-2 text-sm text-gray-500">No reservations found matching your search</p>
+                  <p className="mt-1 text-xs text-gray-400">Try adjusting your search criteria</p>
+                </div>
+              )}
+            </div>
+            
+            <div className="px-4 py-3 border-t border-gray-200 flex justify-end">
+              <button
+                onClick={() => setReservationModalOpen(false)}
+                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 text-sm font-medium"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       
       {/* Edit Check-in Modal */}
       {editingCheckIn && (

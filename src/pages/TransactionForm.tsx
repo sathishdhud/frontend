@@ -14,6 +14,7 @@ interface FormState {
     includingGst: 'Y' | 'N';
     // Add fields for expense transaction
     date: string;
+    // Hidden fields - not shown in UI but stored internally
     shiftNo: string;
     shiftDate: string;
     // Fields for bill-wise transaction
@@ -33,6 +34,7 @@ const initialFormState: FormState = {
     includingGst: 'N',
     // Initialize expense fields
     date: new Date().toISOString().split('T')[0],
+    // Hidden fields
     shiftNo: '1', // This will be automatically set
     shiftDate: new Date().toISOString().split('T')[0], // This will be automatically set
     // Initialize bill-wise fields
@@ -280,17 +282,19 @@ const TransactionForm: React.FC = () => {
                     return;
                 }
 
-                // Create expense transaction for bill using the correct API method
-                // Note: The Expense interface doesn't include billNo, folioNo, roomNo, guestName
-                // These are for reference only and not sent to the API
+                // Create expense transaction for bill using the enhanced API method
                 await transactionApi.createExpense({
                     voucherNo: form.voucherNo || `EXP-${new Date().getTime()}`,
                     date: form.date,
                     accountHeadId: form.accHeadId,
                     amount: amount,
-                    narration: form.narration,
+                    narration: `Bill-wise expense for ${form.guestName || 'guest'} in room ${form.roomNo || 'N/A'}. Bill No: ${form.billNo}. Folio: ${form.folioNo || 'N/A'}`,
                     shiftNo: form.shiftNo,
-                    shiftDate: form.shiftDate
+                    shiftDate: form.shiftDate,
+                    roomNo: form.roomNo,
+                    folioNo: form.folioNo,
+                    billNo: form.billNo,
+                    guestName: form.guestName
                 });
                 
                 alert('Expense saved successfully for bill!');
@@ -314,17 +318,19 @@ const TransactionForm: React.FC = () => {
                     return;
                 }
 
-                // Create expense transaction for room using the correct API method
-                // Note: The Expense interface doesn't include billNo, folioNo, roomNo, guestName
-                // These are for reference only and not sent to the API
+                // Create expense transaction for room using the enhanced API method
                 await transactionApi.createExpense({
                     voucherNo: form.voucherNo || `EXP-${new Date().getTime()}`,
                     date: form.date,
                     accountHeadId: form.accHeadId,
                     amount: amount,
-                    narration: form.narration,
+                    narration: `Room-wise expense for ${form.guestName || 'guest'} in room ${form.roomNo || 'N/A'}. Folio: ${form.folioNo || 'N/A'}`,
                     shiftNo: form.shiftNo,
-                    shiftDate: form.shiftDate
+                    shiftDate: form.shiftDate,
+                    roomNo: form.roomNo,
+                    folioNo: form.folioNo,
+                    billNo: form.billNo,
+                    guestName: form.guestName
                 });
                 
                 alert('Expense saved successfully for room!');
@@ -718,7 +724,7 @@ const TransactionForm: React.FC = () => {
                 {activeTab === 'room' && form.folioNo && (
                     <div className="bg-white rounded-xl shadow-sm border border-gray-200 mt-6">
                         <div className="p-4 border-b border-gray-200">
-                            <h3 className="text-lg font-semibold text-gray-900">Recent Transactions for Folio</h3>
+                            <h3 className="text-lg font-semibold text-gray-900">Recent Transactions for Folio {form.folioNo}</h3>
                         </div>
                         <div className="p-4">
                             {transactionsLoading ? (
@@ -732,6 +738,8 @@ const TransactionForm: React.FC = () => {
                                         <thead className="bg-gray-50">
                                             <tr>
                                                 <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                                                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Room No</th>
+                                                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Guest Name</th>
                                                 <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Account Head</th>
                                                 <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
                                                 <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Narration</th>
@@ -745,6 +753,12 @@ const TransactionForm: React.FC = () => {
                                                 <tr key={index} className="hover:bg-gray-50">
                                                     <td className="px-4 py-2 whitespace-nowrap text-xs text-gray-900">
                                                         {transaction.date ? new Date(transaction.date).toLocaleDateString() : 'N/A'}
+                                                    </td>
+                                                    <td className="px-4 py-2 whitespace-nowrap text-xs text-gray-900">
+                                                        {transaction.roomNo || form.roomNo || 'N/A'}
+                                                    </td>
+                                                    <td className="px-4 py-2 whitespace-nowrap text-xs text-gray-900">
+                                                        {transaction.guestName || form.guestName || 'N/A'}
                                                     </td>
                                                     <td className="px-4 py-2 whitespace-nowrap text-xs text-gray-900">
                                                         {transaction.accHeadName}

@@ -255,7 +255,7 @@ export const transactionApi = {
   getTransactionExpenses: (): Promise<AxiosResponse<ApiResponse<Expense[]>>> =>
     apiClient.get('/transactions/expenses'),
   
-  // Hotel Expense Management (new functionality)
+  // Hotel Expense Management (new enhanced functionality)
   createExpense: (data: {
     voucherNo: string;
     date: string;
@@ -264,6 +264,10 @@ export const transactionApi = {
     narration?: string;
     shiftNo: string;
     shiftDate: string;
+    roomNo?: string;
+    folioNo?: string;
+    billNo?: string;
+    guestName?: string;
   }): Promise<AxiosResponse<ApiResponse<Expense>>> =>
     apiClient.post('/expenses', data),
   
@@ -278,6 +282,10 @@ export const transactionApi = {
     narration?: string;
     shiftNo: string;
     shiftDate: string;
+    roomNo?: string;
+    folioNo?: string;
+    billNo?: string;
+    guestName?: string;
   }): Promise<AxiosResponse<ApiResponse<Expense>>> =>
     apiClient.put(`/expenses/${expenseId}`, data),
   
@@ -302,6 +310,10 @@ export const transactionApi = {
     narration?: string;
     shiftNo: string;
     shiftDate: string;
+    roomNo?: string;
+    folioNo?: string;
+    billNo?: string;
+    guestName?: string;
   }): Promise<AxiosResponse<ApiResponse<Expense>>> =>
     apiClient.post(`/expenses/bill/${billNo}`, data),
   

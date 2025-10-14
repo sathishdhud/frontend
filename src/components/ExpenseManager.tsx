@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Expense, AccountHead } from '../types/api';
-import { transactionApi, masterDataApi, checkInApi } from '../services/api';
+import { transactionApi, masterDataApi, roomApi, checkInApi } from '../services/api';
 
 interface ExpenseManagerProps {
   onExpenseUpdated?: () => void;
@@ -10,6 +10,7 @@ const ExpenseManager: React.FC<ExpenseManagerProps> = ({ onExpenseUpdated }) => 
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [filteredExpenses, setFilteredExpenses] = useState<Expense[]>([]);
   const [accountHeads, setAccountHeads] = useState<AccountHead[]>([]);
+  const [rooms, setRooms] = useState<{roomId: string, roomNo: string}[]>([]);
   const [loading, setLoading] = useState(false);
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
   const [formData, setFormData] = useState({
@@ -18,8 +19,13 @@ const ExpenseManager: React.FC<ExpenseManagerProps> = ({ onExpenseUpdated }) => 
     accountHeadId: '',
     amount: 0,
     narration: '',
+    // Hidden fields - not shown in UI but stored internally
     shiftNo: '1',
     shiftDate: new Date().toISOString().split('T')[0],
+    roomNo: '',
+    folioNo: '',
+    billNo: '',
+    guestName: '',
   });
   
   // Add filter states
@@ -27,6 +33,7 @@ const ExpenseManager: React.FC<ExpenseManagerProps> = ({ onExpenseUpdated }) => 
     voucherDate: '',
     voucherNo: '',
     room: '',
+    guestName: '',
     checkoutStatus: 'all', // New filter for checkout status
     checkoutDate: '' // New filter for checkout date
   });
@@ -42,6 +49,7 @@ const ExpenseManager: React.FC<ExpenseManagerProps> = ({ onExpenseUpdated }) => 
   useEffect(() => {
     fetchExpenses();
     fetchAccountHeads();
+    fetchRooms();
   }, []);
 
   // Apply filters when expenses or filters change
@@ -52,7 +60,7 @@ const ExpenseManager: React.FC<ExpenseManagerProps> = ({ onExpenseUpdated }) => 
   const fetchExpenses = async () => {
     try {
       setLoading(true);
-      const response = await transactionApi.getTransactionExpenses();
+      const response = await transactionApi.getExpenses();
       if (response.data.success) {
         setExpenses(response.data.data);
       }
@@ -76,6 +84,20 @@ const ExpenseManager: React.FC<ExpenseManagerProps> = ({ onExpenseUpdated }) => 
       }
     } catch (error) {
       console.error('Failed to fetch account heads:', error);
+    }
+  };
+
+  const fetchRooms = async () => {
+    try {
+      const response = await roomApi.getRooms();
+      if (response.data.success) {
+        setRooms(response.data.data.map(room => ({
+          roomId: room.roomId,
+          roomNo: room.roomNo
+        })));
+      }
+    } catch (error) {
+      console.error('Failed to fetch rooms:', error);
     }
   };
 
@@ -117,13 +139,21 @@ const ExpenseManager: React.FC<ExpenseManagerProps> = ({ onExpenseUpdated }) => 
       );
     }
     
-    // Filter by room - since Expense interface doesn't have room field,
-    // we'll search in narration and voucherNo fields where room info might be stored
+    // Filter by room
     if (filters.room) {
       const roomTerm = filters.room.toLowerCase();
       result = result.filter(expense => 
-        (expense.narration && expense.narration.toLowerCase().includes(roomTerm)) ||
-        (expense.voucherNo && expense.voucherNo.toLowerCase().includes(roomTerm))
+        (expense.roomNo && expense.roomNo.toLowerCase().includes(roomTerm)) ||
+        (expense.narration && expense.narration.toLowerCase().includes(roomTerm))
+      );
+    }
+    
+    // Filter by guest name
+    if (filters.guestName) {
+      const guestTerm = filters.guestName.toLowerCase();
+      result = result.filter(expense => 
+        (expense.guestName && expense.guestName.toLowerCase().includes(guestTerm)) ||
+        (expense.narration && expense.narration.toLowerCase().includes(guestTerm))
       );
     }
     
@@ -145,6 +175,7 @@ const ExpenseManager: React.FC<ExpenseManagerProps> = ({ onExpenseUpdated }) => 
       voucherDate: '',
       voucherNo: '',
       room: '',
+      guestName: '',
       checkoutStatus: 'all',
       checkoutDate: ''
     });
@@ -227,8 +258,13 @@ const ExpenseManager: React.FC<ExpenseManagerProps> = ({ onExpenseUpdated }) => 
       accountHeadId: expense.accountHeadId || '',
       amount: expense.amount || 0,
       narration: expense.narration || '',
+      // Hidden fields
       shiftNo: expense.shiftNo || '1',
       shiftDate: expense.shiftDate || new Date().toISOString().split('T')[0],
+      roomNo: expense.roomNo || '',
+      folioNo: expense.folioNo || '',
+      billNo: expense.billNo || '',
+      guestName: expense.guestName || '',
     });
   };
 
@@ -268,8 +304,13 @@ const ExpenseManager: React.FC<ExpenseManagerProps> = ({ onExpenseUpdated }) => 
       accountHeadId: '',
       amount: 0,
       narration: '',
+      // Reset hidden fields
       shiftNo: '1',
       shiftDate: new Date().toISOString().split('T')[0],
+      roomNo: '',
+      folioNo: '',
+      billNo: '',
+      guestName: '',
     });
   };
 
@@ -281,6 +322,44 @@ const ExpenseManager: React.FC<ExpenseManagerProps> = ({ onExpenseUpdated }) => 
   const getAccountHeadName = (accountHeadId: string) => {
     const accountHead = accountHeads.find(a => a.accHeadId === accountHeadId);
     return accountHead ? accountHead.name : accountHeadId;
+  };
+
+  // Auto-fill guest name based on room number
+  const autoFillGuestName = async (roomNo: string) => {
+    if (!roomNo) {
+      setFormData(prev => ({ ...prev, guestName: '' }));
+      return;
+    }
+    
+    try {
+      // Find room by room number
+      const room = rooms.find(r => r.roomNo === roomNo);
+      if (room) {
+        // Get check-in details for this room
+        const checkInResponse = await checkInApi.getCheckInByRoom(room.roomId);
+        if (checkInResponse.data.success && checkInResponse.data.data) {
+          setFormData(prev => ({
+            ...prev,
+            guestName: checkInResponse.data.data.guestName || ''
+          }));
+        }
+      }
+    } catch (error) {
+      console.error('Failed to fetch guest name:', error);
+    }
+  };
+
+  // Handle room number change
+  const handleRoomNoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { value } = e.target;
+    setFormData(prev => ({ ...prev, roomNo: value }));
+    
+    // Auto-fill guest name when room number changes
+    if (value) {
+      setTimeout(() => {
+        autoFillGuestName(value);
+      }, 300);
+    }
   };
 
   return (
@@ -356,6 +435,62 @@ const ExpenseManager: React.FC<ExpenseManagerProps> = ({ onExpenseUpdated }) => 
             />
           </div>
           
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Room Number
+            </label>
+            <input
+              type="text"
+              name="roomNo"
+              value={formData.roomNo}
+              onChange={handleRoomNoChange}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+              placeholder="Enter room number"
+            />
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Guest Name
+            </label>
+            <input
+              type="text"
+              name="guestName"
+              value={formData.guestName}
+              onChange={handleInputChange}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+              placeholder="Enter guest name"
+            />
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Folio Number
+            </label>
+            <input
+              type="text"
+              name="folioNo"
+              value={formData.folioNo}
+              onChange={handleInputChange}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+              placeholder="Enter folio number"
+            />
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Bill Number
+            </label>
+            <input
+              type="text"
+              name="billNo"
+              value={formData.billNo}
+              onChange={handleInputChange}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+              placeholder="Enter bill number"
+            />
+          </div>
+          
           <div className="md:col-span-2">
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Narration
@@ -389,6 +524,14 @@ const ExpenseManager: React.FC<ExpenseManagerProps> = ({ onExpenseUpdated }) => 
               Cancel
             </button>
           )}
+          
+          <button
+            type="button"
+            onClick={resetForm}
+            className="px-4 py-2 border border-gray-300 text-gray-700 font-medium rounded-lg hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+          >
+            Reset
+          </button>
         </div>
       </form>
       
@@ -403,7 +546,7 @@ const ExpenseManager: React.FC<ExpenseManagerProps> = ({ onExpenseUpdated }) => 
             Clear Filters
           </button>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Voucher Date
@@ -433,7 +576,7 @@ const ExpenseManager: React.FC<ExpenseManagerProps> = ({ onExpenseUpdated }) => 
           
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">
-              Room
+              Room Number
             </label>
             <input
               type="text"
@@ -443,9 +586,20 @@ const ExpenseManager: React.FC<ExpenseManagerProps> = ({ onExpenseUpdated }) => 
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
               placeholder="Enter room number"
             />
-            <p className="mt-1 text-xs text-gray-500">
-              Note: Room filtering searches in narration and voucher number fields
-            </p>
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Guest Name
+            </label>
+            <input
+              type="text"
+              name="guestName"
+              value={filters.guestName}
+              onChange={handleFilterChange}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+              placeholder="Enter guest name"
+            />
           </div>
           
           {/* Checkout Status Filter */}
@@ -477,9 +631,6 @@ const ExpenseManager: React.FC<ExpenseManagerProps> = ({ onExpenseUpdated }) => 
               onChange={handleFilterChange}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
             />
-            <p className="mt-1 text-xs text-gray-500">
-              Filter by checkout date (if available)
-            </p>
           </div>
         </div>
       </div>
@@ -505,33 +656,49 @@ const ExpenseManager: React.FC<ExpenseManagerProps> = ({ onExpenseUpdated }) => 
               <table className="min-w-full divide-y divide-gray-200">
                 <thead className="bg-gray-50">
                   <tr>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Voucher No</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Account Head</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Narration</th>
-                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Voucher No</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Room No</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Guest Name</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Folio No</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Bill No</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Account Head</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Narration</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {currentExpenses.map((expense) => (
                     <tr key={expense.transactionId} className="hover:bg-gray-50">
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                         {expense.voucherNo || 'N/A'}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                         {expense.date ? new Date(expense.date).toLocaleDateString() : 'N/A'}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                        {expense.roomNo || 'N/A'}
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                        {expense.guestName || 'N/A'}
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                        {expense.folioNo || 'N/A'}
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
+                        {expense.billNo || 'N/A'}
+                      </td>
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                         {getAccountHeadName(expense.accountHeadId)}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900">
                         ₹{expense.amount?.toFixed(2) || '0.00'}
                       </td>
-                      <td className="px-6 py-4 text-sm text-gray-900 max-w-xs truncate">
+                      <td className="px-4 py-3 text-sm text-gray-900 max-w-xs truncate">
                         {expense.narration || '-'}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                      <td className="px-4 py-3 whitespace-nowrap text-sm font-medium">
                         <button
                           onClick={() => handleEdit(expense)}
                           className="text-indigo-600 hover:text-indigo-900 mr-3"

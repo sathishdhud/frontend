@@ -172,7 +172,7 @@ const BillGeneration: React.FC = () => {
       const allReservationsRes = await reservationApi.getReservations();
       console.log('All reservations result:', allReservationsRes.data);
       
-      if (allReservationsRes.data.success && allReservationsRes.data.length > 0) {
+      if (allReservationsRes.data.success && allReservationsRes.data.data && allReservationsRes.data.data.length > 0) {
         const exactMatch = allReservationsRes.data.data.find((r: Reservation) => r.reservationNo === reservationNo);
         if (exactMatch) {
           console.log('Found exact match in all reservations:', exactMatch);
@@ -637,6 +637,39 @@ const BillGeneration: React.FC = () => {
     }
   };
 
+  // Function to handle checkout and room status update
+  const handleCheckoutAndRoomStatusUpdate = async () => {
+    if (!billData) return;
+    
+    try {
+      // Find the check-in record for this folio
+      const checkInResponse = await checkInApi.getCheckInByFolio(billData.folioNo);
+      
+      if (checkInResponse.data.success && checkInResponse.data.data) {
+        const checkInData = checkInResponse.data.data;
+        
+        // Update room status to "VD" (Vacant Dirty) 
+        if (checkInData.roomId) {
+          await roomApi.updateRoomStatus(checkInData.roomId, 'VD');
+          console.log('Room status updated to VD (Vacant Dirty)');
+        }
+        
+        // Update the check-in record with checkout status and bill number
+        const checkoutDate = new Date().toISOString();
+        await checkInApi.updateCheckIn(billData.folioNo, {
+          departureDate: checkoutDate,
+          checkout: true, // Mark as checked out
+          billNo: billData.billNo // Add bill number to identify checked out records
+        });
+        console.log('Check-in record updated with checkout status and bill number');
+      }
+    } catch (error) {
+      console.error('Error during checkout process:', error);
+      // We don't throw the error to avoid interrupting the payment process
+      // but we log it for debugging purposes
+    }
+  };
+
   // Function to update bill
   const updateBill = async () => {
     if (!billData) {
@@ -681,7 +714,9 @@ const BillGeneration: React.FC = () => {
         });
         
         if (response.data.success) {
-          alert('Bill updated successfully!');
+          // After successful bill update, checkout the guest and update room status
+          await handleCheckoutAndRoomStatusUpdate();
+          alert('Bill updated successfully! Guest has been checked out and room status updated.');
         } else {
           alert(`Failed to update bill: ${response.data.message}`);
         }
