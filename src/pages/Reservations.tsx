@@ -52,7 +52,7 @@ const Reservations: React.FC = () => {
     noOfRooms: 1,
     mobileNumber: "",
     emailId: "",
-    rate: '',
+    rate: 0, // Changed from empty string to 0 to ensure default value
     includingGst: "N" as "Y" | "N",
     remarks: "",
     idProof1: "",
@@ -328,7 +328,7 @@ const Reservations: React.FC = () => {
     const { name, value, type } = e.target;
     setFormData((prev) => ({
       ...prev,
-      [name]: type === "number" ? Number(value) : value,
+      [name]: name === 'rate' ? (value === '' ? 0 : Number(value)) : (type === "number" ? Number(value) : value),
     }));
   };
 
@@ -350,9 +350,20 @@ const Reservations: React.FC = () => {
     setLoading(true);
 
     try {
+      // Validate that rate is provided
+      if (formData.rate <= 0) {
+        setModalTitle("Validation Error");
+        setModalMessage("Rate is required and must be greater than zero.");
+        setModalType('warning');
+        setModalOpen(true);
+        setLoading(false);
+        return;
+      }
+
       // Prepare the data for submission
       const submissionData: any = {
         ...formData,
+        rate: Number(formData.rate) || 0, // Ensure rate is a number
       };
 
       // Handle optional fields - remove empty strings
@@ -418,7 +429,7 @@ const Reservations: React.FC = () => {
       noOfRooms: reservation.noOfRooms || 1,
       mobileNumber: reservation.mobileNumber || "",
       emailId: reservation.emailId || "",
-      rate: reservation.rate ? reservation.rate.toString() : '',
+      rate: reservation.rate || 0, // Changed from string conversion to number with default 0
       includingGst: (reservation.includingGst as "Y" | "N") || "N",
       remarks: reservation.remarks || "",
       idProof1: reservation.idProof1 || "",
@@ -810,7 +821,7 @@ const Reservations: React.FC = () => {
       noOfRooms: 1,
       mobileNumber: "",
       emailId: "",
-      rate: '',
+      rate: 0, // Changed from empty string to 0
       includingGst: "N",
       remarks: "",
       idProof1: "",

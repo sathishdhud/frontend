@@ -1,30 +1,28 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { ArrowsRightLeftIcon, CheckCircleIcon } from '@heroicons/react/24/outline';
 import { CheckIn as CheckInType, Room, Advance, RoomType, Company, PlanType, SettlementType, ArrivalMode, Nationality, RefMode, ReservationSource, Reservation } from '../types/api';
 import { checkInApi, roomApi, advanceApi, reservationApi, masterDataApi } from '../services/api';
 import Layout from '../components/Layout/Layout';
 import Modal from '../components/Modal';
+import { handleApiError, isUnauthorizedError } from '../utils/errorHandler';
+import { useAuth } from '../contexts/AuthContext';
 
 const CheckIn: React.FC = () => {
+  const { handleUnauthorizedError } = useAuth();
   const [isWalkIn, setIsWalkIn] = useState(false);
   const [loading, setLoading] = useState(false);
   const [availableRooms, setAvailableRooms] = useState<Room[]>([]);
   const [allRooms, setAllRooms] = useState<Room[]>([]);
   const [roomsLoading, setRoomsLoading] = useState(false);
   const [advances, setAdvances] = useState<Advance[]>([]);
-  // Add state for auto-fill loading
   const [autoFillLoading, setAutoFillLoading] = useState(false);
-  // Add state for reservation info
   const [reservationInfo, setReservationInfo] = useState<any>(null);
-  // Add notification states
   const [successMessage, setSuccessMessage] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
-  // Add state for tabs
   const [activeTab, setActiveTab] = useState<'basic' | 'additional'>('basic');
-  // Add state for edit form tabs
   const [editFormTab, setEditFormTab] = useState<'basic' | 'additional'>('basic');
   
-  // Add master data states
+  // Master data states
   const [roomTypes, setRoomTypes] = useState<RoomType[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
   const [planTypes, setPlanTypes] = useState<PlanType[]>([]);
@@ -36,14 +34,20 @@ const CheckIn: React.FC = () => {
   const [masterDataLoading, setMasterDataLoading] = useState(false);
   const [masterDataFetched, setMasterDataFetched] = useState(false);
 
-  // Add state for in-house guests
+  // In-house guests states
   const [inHouseGuests, setInHouseGuests] = useState<CheckInType[]>([]);
   const [checkedOutGuests, setCheckedOutGuests] = useState<CheckInType[]>([]);
   const [filteredGuests, setFilteredGuests] = useState<CheckInType[]>([]);
   const [editingCheckIn, setEditingCheckIn] = useState<CheckInType | null>(null);
   const [searchLoading, setSearchLoading] = useState(false);
-  // Add state for manage check-ins tabs
   const [manageCheckInsTab, setManageCheckInsTab] = useState<'inhouse' | 'checkedout'>('inhouse');
+  
+  // Search criteria states
+  const [folioNoSearch, setFolioNoSearch] = useState('');
+  const [roomNoSearch, setRoomNoSearch] = useState('');
+  const [guestNameSearch, setGuestNameSearch] = useState('');
+  const [arrivalDateSearch, setArrivalDateSearch] = useState('');
+  const [departureDateSearch, setDepartureDateSearch] = useState('');
 
   // Modal states
   const [modalOpen, setModalOpen] = useState(false);
@@ -56,14 +60,14 @@ const CheckIn: React.FC = () => {
   const [confirmText, setConfirmText] = useState('Confirm');
   const [cancelText, setCancelText] = useState('Cancel');
 
-  // Add reservation selection modal state
+  // Reservation selection modal state
   const [reservationModalOpen, setReservationModalOpen] = useState(false);
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [filteredReservations, setFilteredReservations] = useState<Reservation[]>([]);
   const [reservationsLoading, setReservationsLoading] = useState(false);
   const [reservationSearchTerm, setReservationSearchTerm] = useState('');
 
-  // Add a ref for debouncing
+  // Debounce ref
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
   
   // Filter reservations based on search term
@@ -126,7 +130,7 @@ const CheckIn: React.FC = () => {
     resvSourceId: '',
   });
 
-  // Add edit form data state
+  // Edit form data state
   const [editFormData, setEditFormData] = useState({
     folioNo: '',
     reservationNo: '',
@@ -134,6 +138,7 @@ const CheckIn: React.FC = () => {
     roomId: '',
     arrivalDate: '',
     departureDate: '',
+    noOfDays: 1,
     mobileNumber: '',
     emailId: '',
     rate: 0,
@@ -151,12 +156,12 @@ const CheckIn: React.FC = () => {
     nationalityId: '',
     refModeId: '',
     resvSourceId: '',
-    includingGst: 'Y' as 'Y' | 'N',
+    includingGst: 'N' as 'Y' | 'N',
     noOfPersons: 1,
     checkout: false,
   });
 
-  // Function to show notifications
+  // Show notification function
   const showNotification = (message: string, isSuccess: boolean = true) => {
     if (isSuccess) {
       setSuccessMessage(message);
@@ -173,7 +178,7 @@ const CheckIn: React.FC = () => {
     }, 5000);
   };
 
-  // Add function to fetch all reservations
+  // Fetch all reservations
   const fetchAllReservations = async () => {
     setReservationsLoading(true);
     try {
@@ -200,7 +205,7 @@ const CheckIn: React.FC = () => {
     }
   };
 
-  // Add function to handle reservation selection
+  // Handle reservation selection
   const handleSelectReservation = (reservation: Reservation) => {
     // Check if reservation still has rooms available
     const roomsCheckedIn = reservation.roomsCheckedIn || 0;
@@ -245,7 +250,7 @@ const CheckIn: React.FC = () => {
     setIsWalkIn(false); // Ensure we're not in walk-in mode
   };
 
-  // Add function to fetch in-house guests (not checked out)
+  // Fetch in-house guests (not checked out)
   const fetchInHouseGuests = async () => {
     try {
       const response = await checkInApi.getInHouseGuests();
@@ -263,7 +268,7 @@ const CheckIn: React.FC = () => {
     }
   };
 
-  // Add function to fetch checked-out guests
+  // Fetch checked-out guests
   const fetchCheckedOutGuests = async () => {
     try {
       const response = await checkInApi.getInHouseGuests();
@@ -281,59 +286,85 @@ const CheckIn: React.FC = () => {
     }
   };
 
-  // Add function to search check-ins with debounce
-  const searchCheckIns = (searchTerm: string) => {
-    // Clear previous timeout
-    if (debounceRef.current) {
-      clearTimeout(debounceRef.current);
-    }
-    
-    // Set loading state
+  // Enhanced search function with multiple criteria
+  const searchCheckInsWithCriteria = () => {
     setSearchLoading(true);
     
-    // Set new timeout
-    debounceRef.current = setTimeout(async () => {
-      if (!searchTerm.trim()) {
-        // Show all guests based on current tab
-        if (manageCheckInsTab === 'inhouse') {
-          setFilteredGuests(inHouseGuests);
-        } else {
-          setFilteredGuests(checkedOutGuests);
+    // Get the appropriate guest list based on current tab
+    const currentGuests = manageCheckInsTab === 'inhouse' ? inHouseGuests : checkedOutGuests;
+    
+    try {
+      // Filter guests by multiple criteria
+      const filteredGuestsList = currentGuests.filter(guest => {
+        // Check folio number
+        if (folioNoSearch && !guest.folioNo.toLowerCase().includes(folioNoSearch.toLowerCase())) {
+          return false;
         }
-        setSearchLoading(false);
-        return;
-      }
+        
+        // Check room number
+        if (roomNoSearch) {
+          const roomNo = getRoomNoByIdWithFallback(guest.roomId, guest.roomNo).toLowerCase();
+          if (!roomNo.includes(roomNoSearch.toLowerCase())) {
+            return false;
+          }
+        }
+        
+        // Check guest name
+        if (guestNameSearch && !guest.guestName.toLowerCase().includes(guestNameSearch.toLowerCase())) {
+          return false;
+        }
+        
+        // Check arrival date
+        if (arrivalDateSearch) {
+          const guestArrivalDate = new Date(guest.arrivalDate).toISOString().split('T')[0];
+          if (guestArrivalDate !== arrivalDateSearch) {
+            return false;
+          }
+        }
+        
+        // Check departure date
+        if (departureDateSearch) {
+          const guestDepartureDate = new Date(guest.departureDate).toISOString().split('T')[0];
+          if (guestDepartureDate !== departureDateSearch) {
+            return false;
+          }
+        }
+        
+        return true;
+      });
       
-      // Filter guests by room number locally
-      try {
-        let filteredGuestsList: CheckInType[] = [];
-        
-        // Get the appropriate guest list based on current tab
-        const currentGuests = manageCheckInsTab === 'inhouse' ? inHouseGuests : checkedOutGuests;
-        
-        // Filter by room number
-        filteredGuestsList = currentGuests.filter(guest => {
-          const roomNo = getRoomNoByIdWithFallback(guest.roomId, guest.roomNo);
-          return roomNo.toLowerCase().includes(searchTerm.toLowerCase());
-        });
-        
-        setFilteredGuests(filteredGuestsList);
-      } catch (error) {
-        console.error('Search failed:', error);
-        showNotification('Search failed. Showing all guests.', false);
-        // Show all guests based on current tab
-        if (manageCheckInsTab === 'inhouse') {
-          setFilteredGuests(inHouseGuests);
-        } else {
-          setFilteredGuests(checkedOutGuests);
-        }
-      } finally {
-        setSearchLoading(false);
+      setFilteredGuests(filteredGuestsList);
+    } catch (error) {
+      console.error('Search failed:', error);
+      showNotification('Search failed. Showing all guests.', false);
+      // Show all guests based on current tab
+      if (manageCheckInsTab === 'inhouse') {
+        setFilteredGuests(inHouseGuests);
+      } else {
+        setFilteredGuests(checkedOutGuests);
       }
-    }, 300); // 300ms debounce
+    } finally {
+      setSearchLoading(false);
+    }
   };
 
-  // Add function to get room number by room ID
+  // Clear search function
+  const clearSearch = () => {
+    setFolioNoSearch('');
+    setRoomNoSearch('');
+    setGuestNameSearch('');
+    setArrivalDateSearch('');
+    setDepartureDateSearch('');
+    
+    // Reset the filtered guests to the current tab's full list
+    if (manageCheckInsTab === 'inhouse') {
+      setFilteredGuests(inHouseGuests);
+    } else {
+      setFilteredGuests(checkedOutGuests);
+    }
+  };
+
+  // Get room number by room ID
   const getRoomNoById = (roomId: string) => {
     // First check in available rooms
     let room = availableRooms.find(r => r.roomId === roomId);
@@ -346,12 +377,12 @@ const CheckIn: React.FC = () => {
     return room ? room.roomNo : '';
   };
 
-  // Add function to get room by room ID
+  // Get room by room ID
   const getRoomById = (roomId: string) => {
     return availableRooms.find(r => r.roomId === roomId);
   };
 
-  // Add function to get room number by room ID with fallback
+  // Get room number by room ID with fallback
   const getRoomNoByIdWithFallback = (roomId: string, roomNo?: string) => {
     // Try to get from available rooms first
     const roomNoFromAvailable = getRoomNoById(roomId);
@@ -360,7 +391,7 @@ const CheckIn: React.FC = () => {
     return roomNoFromAvailable || roomNo || 'N/A';
   };
 
-  // Add function to handle edit check-in
+  // Handle edit check-in
   const handleEditCheckIn = (checkIn: CheckInType) => {
     setEditingCheckIn(checkIn);
     setEditFormData({
@@ -370,11 +401,12 @@ const CheckIn: React.FC = () => {
       roomId: checkIn.roomId || '',
       arrivalDate: checkIn.arrivalDate || '',
       departureDate: checkIn.departureDate || '',
+      noOfDays: 1, // Will be calculated by useEffect
       mobileNumber: checkIn.mobileNumber || '',
       emailId: checkIn.emailId || '',
       rate: checkIn.rate || 0,
       walkIn: checkIn.walkIn || 'N',
-      remarks:  checkIn.remarks || '',
+      remarks: checkIn.remarks || '',
       idProof1: checkIn.idProof1 || '',
       idProof2: checkIn.idProof2 || '',
       idProof3: checkIn.idProof3 || '',
@@ -407,7 +439,7 @@ const CheckIn: React.FC = () => {
     }
   };
 
-  // Add function to handle edit form input changes
+  // Handle edit form input changes
   const handleEditFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value, type } = e.target;
     setEditFormData(prev => ({
@@ -417,7 +449,7 @@ const CheckIn: React.FC = () => {
     }));
   };
 
-  // Add function to update check-in details
+  // Update check-in details
   const handleUpdateCheckIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -493,16 +525,32 @@ const CheckIn: React.FC = () => {
           setModalOpen(true);
           setEditingCheckIn(null);
           setEditFormTab('basic'); // Reset tab to basic
-          fetchInHouseGuests(); // Refresh the list
+          
+          // Refresh the appropriate guest list
+          if (editFormData.checkout) {
+            fetchCheckedOutGuests();
+          } else {
+            fetchInHouseGuests();
+          }
         } else {
           throw new Error(response.data.message || 'Failed to update check-in details');
         }
       }
     } catch (error: any) {
       console.error('Update error:', error); // Debug log
+      
+      // Handle 401 errors specifically
+      if (isUnauthorizedError(error)) {
+        // Let the AuthContext handle the unauthorized error
+        handleUnauthorizedError();
+        return;
+      }
+      
+      const errorMessage = handleApiError(error);
+      
       // Use Modal for error message
       setModalTitle("Error");
-      setModalMessage(`Error: ${error.response?.data?.message || error.message || 'Failed to update check-in details'}`);
+      setModalMessage(`Error: ${errorMessage}`);
       setModalType('error');
       setModalOpen(true);
     } finally {
@@ -510,11 +558,12 @@ const CheckIn: React.FC = () => {
     }
   };
 
-  // Add function to cancel editing
+  // Cancel editing
   const handleCancelEdit = () => {
     setEditingCheckIn(null);
   };
 
+  // Initialize data on component mount
   useEffect(() => {
     fetchAvailableRooms();
     fetchAllRooms();
@@ -559,6 +608,36 @@ const CheckIn: React.FC = () => {
     }
   }, [isWalkIn]);
 
+  // Calculate number of days when dates change in main form
+  useEffect(() => {
+    if (formData.arrivalDate && formData.departureDate) {
+      const arrival = new Date(formData.arrivalDate);
+      const departure = new Date(formData.departureDate);
+      
+      // Check if dates are valid
+      if (!isNaN(arrival.getTime()) && !isNaN(departure.getTime()) && departure >= arrival) {
+        const diffTime = departure.getTime() - arrival.getTime();
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        setFormData(prev => ({ ...prev, noOfDays: diffDays > 0 ? diffDays : 1 }));
+      }
+    }
+  }, [formData.arrivalDate, formData.departureDate]);
+  
+  // Calculate number of days when dates change in edit form
+  useEffect(() => {
+    if (editFormData.arrivalDate && editFormData.departureDate) {
+      const arrival = new Date(editFormData.arrivalDate);
+      const departure = new Date(editFormData.departureDate);
+      
+      // Check if dates are valid
+      if (!isNaN(arrival.getTime()) && !isNaN(departure.getTime()) && departure >= arrival) {
+        const diffTime = departure.getTime() - arrival.getTime();
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        setEditFormData(prev => ({ ...prev, noOfDays: diffDays > 0 ? diffDays : 1 }));
+      }
+    }
+  }, [editFormData.arrivalDate, editFormData.departureDate]);
+
   // Fetch master data on component mount and when additional tab is opened
   useEffect(() => {
     if (activeTab === 'additional' && !masterDataFetched) {
@@ -566,6 +645,7 @@ const CheckIn: React.FC = () => {
     }
   }, [activeTab, masterDataFetched]);
 
+  // Fetch master data
   const fetchMasterData = async () => {
     setMasterDataLoading(true);
     try {
@@ -623,14 +703,16 @@ const CheckIn: React.FC = () => {
         setReservationSources(reservationSourcesRes.data.data);
       }
       
-      setMasterDataFetched(true);
     } catch (error) {
       console.error('Failed to fetch master data:', error);
+      showNotification('Failed to fetch master data. Please try again.', false);
     } finally {
       setMasterDataLoading(false);
+      setMasterDataFetched(true);
     }
   };
 
+  // Fetch available rooms
   const fetchAvailableRooms = async () => {
     setRoomsLoading(true);
     try {
@@ -645,21 +727,24 @@ const CheckIn: React.FC = () => {
     }
   };
 
+  // Fetch all rooms
   const fetchAllRooms = async () => {
     setRoomsLoading(true);
     try {
-      const response = await roomApi.getRooms();
+      const response = await roomApi.getAllRooms();
       if (response.data.success) {
         setAllRooms(response.data.data);
       }
     } catch (error) {
-      console.error('Failed to fetch all rooms:', error);
+      showNotification('Failed to fetch all rooms. Please try again.', false);
     } finally {
       setRoomsLoading(false);
     }
   };
 
+  // Fetch advances
   const fetchAdvances = async () => {
+    setAutoFillLoading(true);
     try {
       const response = await advanceApi.getAdvancesByReservation(formData.reservationNo);
       if (response.data.success) {
@@ -667,10 +752,12 @@ const CheckIn: React.FC = () => {
       }
     } catch (error) {
       showNotification('Failed to fetch advances. Please try again.', false);
+    } finally {
+      setAutoFillLoading(false);
     }
   };
 
-  // Function to fetch and display reservation information
+  // Fetch reservation info
   const fetchReservationInfo = async (reservationNo: string) => {
     if (!reservationNo) {
       setReservationInfo(null);
@@ -698,7 +785,7 @@ const CheckIn: React.FC = () => {
     }
   };
 
-  // Function to auto-fill guest name based on reservation number
+  // Auto-fill guest name based on reservation number
   const autoFillGuestName = async (reservationNo: string) => {
     if (!reservationNo) {
       setFormData(prev => ({ ...prev, guestName: '' }));
@@ -766,8 +853,7 @@ const CheckIn: React.FC = () => {
     }
   };
 
-  // Function to check if a reservation can accept more check-ins
-
+  // Check if a reservation can accept more check-ins
   const canCheckInToReservation = async (reservationNo: string): Promise<{ canCheckIn: boolean; message?: string }> => {
     try {
       const response = await reservationApi.searchReservations(reservationNo);
@@ -804,8 +890,15 @@ const CheckIn: React.FC = () => {
     }
   };
 
+  // Handle input changes
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value, type } = e.target;
+    
+    // Prevent manual editing of noOfDays as it's auto-calculated
+    if (name === 'noOfDays') {
+      return;
+    }
+    
     setFormData(prev => ({
       ...prev,
       [name]: type === 'number' ? Number(value) : 
@@ -828,7 +921,7 @@ const CheckIn: React.FC = () => {
     }
   };
 
-  // Function to check if rooms are already assigned for a reservation
+  // Check if rooms are already assigned for a reservation
   const checkRoomsAssigned = async (reservationNo: string) => {
     if (!reservationNo) return;
     
@@ -853,6 +946,7 @@ const CheckIn: React.FC = () => {
     }
   };
 
+  // Handle form submission
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -987,8 +1081,17 @@ const CheckIn: React.FC = () => {
         setModalOpen(true);
       }
     } catch (error: any) {
+      // Handle 401 errors specifically
+      if (isUnauthorizedError(error)) {
+        // Let the AuthContext handle the unauthorized error
+        handleUnauthorizedError();
+        return;
+      }
+      
+      const errorMessage = handleApiError(error);
+      
       setModalTitle("Error");
-      setModalMessage(`Error: ${error.response?.data?.message || 'Failed to process check-in'}`);
+      setModalMessage(`Error: ${errorMessage}`);
       setModalType('error');
       setModalOpen(true);
     } finally {
@@ -996,6 +1099,7 @@ const CheckIn: React.FC = () => {
     }
   };
 
+  // Handle clear form
   const handleClear = () => {
     setFormData({
       reservationNo: '',
@@ -1197,7 +1301,7 @@ const CheckIn: React.FC = () => {
               {/* Tab Content */}
               {activeTab === 'basic' ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mb-4">
-                  {/* Reservation Number - Same width as other fields */}
+                  {/* Reservation Number */}
                   {!isWalkIn && (
                     <div>
                       <label className="block text-xs font-medium text-gray-700 mb-1">
@@ -1319,9 +1423,10 @@ const CheckIn: React.FC = () => {
                       name="noOfDays"
                       min="1"
                       value={formData.noOfDays}
-                      onChange={handleInputChange}
-                      className="w-full px-2 py-1.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-xs"
+                      readOnly
+                      className="w-full px-2 py-1.5 border border-gray-300 rounded-lg bg-gray-100 text-gray-500 text-xs"
                     />
+                    <p className="text-xs text-gray-500 mt-1">Auto-calculated</p>
                   </div>
 
                   {/* No of Persons */}
@@ -1654,43 +1759,91 @@ const CheckIn: React.FC = () => {
           </div>
 
           <div className="p-4">
-            <div className="flex justify-between items-center mb-4">
-              <div className="relative w-64">
-                <input
-                  type="text"
-                  placeholder="Search by room number..."
-                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
-                  onChange={(e) => {
-                    searchCheckIns(e.target.value);
-                  }}
-                />
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  {searchLoading ? (
-                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600"></div>
-                  ) : (
-                    <svg className="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
-                    </svg>
-                  )}
+            {/* Enhanced Search Form */}
+            <div className="mb-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Folio No</label>
+                  <input
+                    type="text"
+                    placeholder="Enter folio number"
+                    value={folioNoSearch}
+                    onChange={(e) => setFolioNoSearch(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Room No</label>
+                  <input
+                    type="text"
+                    placeholder="Enter room number"
+                    value={roomNoSearch}
+                    onChange={(e) => setRoomNoSearch(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Guest Name</label>
+                  <input
+                    type="text"
+                    placeholder="Enter guest name"
+                    value={guestNameSearch}
+                    onChange={(e) => setGuestNameSearch(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                  />
                 </div>
               </div>
-              <button
-                onClick={() => {
-                  // Reset search input
-                  const searchInput = document.querySelector('input[placeholder="Search check-ins..."]') as HTMLInputElement;
-                  if (searchInput) {
-                    searchInput.value = '';
-                  }
-                  fetchInHouseGuests();
-                  fetchCheckedOutGuests();
-                }}
-                className="flex items-center space-x-1 px-3 py-2 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
-                </svg>
-                <span>Refresh</span>
-              </button>
+              
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Arrival Date</label>
+                  <input
+                    type="date"
+                    value={arrivalDateSearch}
+                    onChange={(e) => setArrivalDateSearch(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">Departure Date</label>
+                  <input
+                    type="date"
+                    value={departureDateSearch}
+                    onChange={(e) => setDepartureDateSearch(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
+                  />
+                </div>
+                <div className="flex items-end space-x-2">
+                  <button
+                    onClick={searchCheckInsWithCriteria}
+                    disabled={searchLoading}
+                    className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 text-sm font-medium flex items-center justify-center"
+                  >
+                    {searchLoading ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                        Searching...
+                      </>
+                    ) : (
+                      <>
+                        <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                        </svg>
+                        Search
+                      </>
+                    )}
+                  </button>
+                  <button
+                    onClick={clearSearch}
+                    className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 text-sm font-medium flex items-center"
+                  >
+                    <svg className="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                    </svg>
+                    Clear
+                  </button>
+                </div>
+              </div>
             </div>
 
             <div className="overflow-x-auto">
@@ -1702,6 +1855,7 @@ const CheckIn: React.FC = () => {
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Room</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Arrival Date</th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Departure Date</th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
                     {manageCheckInsTab === 'checkedout' && (
                       <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Checkout Date</th>
                     )}
@@ -1717,10 +1871,23 @@ const CheckIn: React.FC = () => {
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                           {getRoomNoByIdWithFallback(checkIn.roomId, checkIn.roomNo)}
                         </td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(checkIn.arrivalDate).toLocaleDateString()}</td>
-                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{new Date(checkIn.departureDate).toLocaleDateString()}</td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {checkIn.arrivalDate ? new Date(checkIn.arrivalDate).toLocaleDateString('en-GB') : 'N/A'}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          {checkIn.departureDate ? new Date(checkIn.departureDate).toLocaleDateString('en-GB') : 'N/A'}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                          <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                            checkIn.checkout ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'
+                          }`}>
+                            {checkIn.checkout ? 'Checked Out' : 'In-House'}
+                          </span>
+                        </td>
                         {manageCheckInsTab === 'checkedout' && (
-                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{checkIn.auditDate ? new Date(checkIn.auditDate).toLocaleDateString() : 'N/A'}</td>
+                          <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                            {checkIn.auditDate ? new Date(checkIn.auditDate).toLocaleDateString('en-GB') : 'N/A'}
+                          </td>
                         )}
                         <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                           <button
@@ -1736,8 +1903,15 @@ const CheckIn: React.FC = () => {
                     ))
                   ) : (
                     <tr>
-                      <td colSpan={manageCheckInsTab === 'inhouse' ? 6 : 7} className="px-6 py-4 text-center text-sm text-gray-500">
-                        {manageCheckInsTab === 'inhouse' ? 'No in-house guests found' : 'No checked-out guests found'}
+                      <td colSpan={manageCheckInsTab === 'inhouse' ? 7 : 8} className="px-6 py-4 text-center text-sm text-gray-500">
+                        {searchLoading ? (
+                          <div className="flex justify-center items-center">
+                            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-600 mr-2"></div>
+                            Searching...
+                          </div>
+                        ) : (
+                          manageCheckInsTab === 'inhouse' ? 'No in-house guests found' : 'No checked-out guests found'
+                        )}
                       </td>
                     </tr>
                   )}
@@ -1885,6 +2059,24 @@ const CheckIn: React.FC = () => {
             </div>
             
             <form onSubmit={handleUpdateCheckIn} className="flex-1 overflow-y-auto">
+              {/* Warning for checked-out guests */}
+              {editFormData.checkout && (
+                <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-4">
+                  <div className="flex">
+                    <div className="flex-shrink-0">
+                      <svg className="h-5 w-5 text-yellow-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                      </svg>
+                    </div>
+                    <div className="ml-3">
+                      <p className="text-sm text-yellow-700">
+                        This guest has already checked out. You can still edit their details.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+              
               {/* Tabs */}
               <div className="flex border-b border-gray-200 bg-gray-50">
                 <button
@@ -2015,6 +2207,21 @@ const CheckIn: React.FC = () => {
                       />
                     </div>
                     
+                    {/* No of Days */}
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                        No of Days
+                      </label>
+                      <input
+                        type="number"
+                        name="noOfDays"
+                        min="1"
+                        value={editFormData.noOfDays || 1}
+                        onChange={handleEditFormChange}
+                        className="w-full px-2 py-1.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-xs"
+                      />
+                    </div>
+                    
                     {/* No of Persons */}
                     <div>
                       <label className="block text-xs font-medium text-gray-700 mb-1">
@@ -2080,11 +2287,11 @@ const CheckIn: React.FC = () => {
                       <select
                         name="includingGst"
                         value={editFormData.includingGst}
-                        onChange={(e) => setEditFormData(prev => ({ ...prev, includingGst: e.target.value as 'Y' | 'N' }))}
+                        onChange={handleEditFormChange}
                         className="w-full px-2 py-1.5 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-xs"
                       >
-                        <option value="Y">Y</option>
-                        <option value="N">N</option>
+                        <option value="N">No</option>
+                        <option value="Y">Yes</option>
                       </select>
                     </div>
                   </div>

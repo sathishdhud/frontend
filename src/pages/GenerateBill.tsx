@@ -5,6 +5,8 @@ import { Advance, CheckIn, PaymentMode, Room, Reservation, Expense } from '../ty
 import { advanceApi, masterDataApi, checkInApi, transactionApi, billApi, roomApi, reservationApi } from '../services/api';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
+import { handleApiError, isUnauthorizedError } from '../utils/errorHandler';
+import { useAuth } from '../contexts/AuthContext';
 
 // Define PaymentFormData interface
 interface PaymentFormData {
@@ -14,6 +16,7 @@ interface PaymentFormData {
 }
 
 const BillGeneration: React.FC = () => {
+  const { handleUnauthorizedError } = useAuth();
   const location = useLocation();
   // Tab state - added 'room' tab
   const [activeTab, setActiveTab] = useState<'reservation' | 'folio' | 'room'>('reservation');
@@ -52,6 +55,9 @@ const BillGeneration: React.FC = () => {
   // Check-ins modal state
   const [checkInsData, setCheckInsData] = useState<CheckIn[]>([]);
   const [showCheckInsModal, setShowCheckInsModal] = useState(false);
+  
+  // Checkout confirmation state
+  const [showCheckoutConfirmation, setShowCheckoutConfirmation] = useState(false);
   
   // Ref for print content
   const billContentRef = useRef<HTMLDivElement>(null);
@@ -499,17 +505,22 @@ const BillGeneration: React.FC = () => {
       setShowPaymentForm(false);
     } catch (error: any) {
       console.error('Failed to generate bill by reservation:', error);
-      let errorMessage = 'Failed to generate bill. Please try again.';
-      if (error.message) {
-        errorMessage = error.message;
+      
+      // Handle 401 errors specifically
+      if (isUnauthorizedError(error)) {
+        // Let the AuthContext handle the unauthorized error
+        handleUnauthorizedError();
+        return;
       }
+      
+      const errorMessage = handleApiError(error);
       alert(`Failed to generate bill: ${errorMessage}`);
     } finally {
       setLoading(false);
     }
   };
 
-  // Function to generate bill by folio
+  // Function to generate bill by folio with checkout confirmation
   const generateBillByFolio = async (folioNo: string) => {
     if (!folioNo) {
       alert('Please enter a folio number.');
@@ -737,6 +748,9 @@ const BillGeneration: React.FC = () => {
           paymentNotes: ''
         });
         setShowPaymentForm(false);
+        
+        // Show checkout confirmation dialog automatically after bill generation
+        setShowCheckoutConfirmation(true);
       } else {
         console.error('Bill generation API returned failure:', response.data);
         alert(`Failed to generate bill: ${response.data.message}`);
@@ -757,6 +771,44 @@ const BillGeneration: React.FC = () => {
       alert(`Failed to generate bill: ${errorMessage}`);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Function to handle checkout confirmation
+  const handleCheckoutConfirmation = async (confirmed: boolean) => {
+    setShowCheckoutConfirmation(false);
+    
+    if (confirmed && billData) {
+      try {
+        // Find the check-in record for this folio
+        const checkInResponse = await checkInApi.getCheckInByFolio(billData.folioNo);
+        
+        if (checkInResponse.data.success && checkInResponse.data.data) {
+          const checkInData = checkInResponse.data.data;
+          
+          // Update room status to "VD" (Vacant Dirty) 
+          if (checkInData.roomId) {
+            await roomApi.updateRoomStatus(checkInData.roomId, 'VD');
+            console.log('Room status updated to VD (Vacant Dirty)');
+          }
+          
+          // Update the check-in record with checkout status and bill number
+          const checkoutDate = new Date().toISOString();
+          await checkInApi.updateCheckIn(billData.folioNo, {
+            departureDate: checkoutDate,
+            checkout: true, // Mark as checked out
+            billNo: billData.billNo // Add bill number to identify checked out records
+          });
+          console.log('Check-in record updated with checkout status and bill number');
+          
+          // Show success message
+          alert(`Guest ${billData.guestName} has been successfully checked out.\nRoom status updated to Vacant Dirty.`);
+        }
+      } catch (error: any) {
+        console.error('Error during checkout process:', error);
+        const errorMessage = error.message || error.toString() || 'Unknown error occurred';
+        alert(`Error during checkout process: ${errorMessage}`);
+      }
     }
   };
 
@@ -833,10 +885,7 @@ const BillGeneration: React.FC = () => {
         });
         
         if (response.data.success) {
-          // After successful bill update, checkout the guest and update room status
-          await handleCheckoutAndRoomStatusUpdate();
-          
-          alert('Bill updated successfully! Guest has been checked out and room status updated.');
+          alert('Bill updated successfully!\n\nNote: The guest has not been checked out yet.\nTo checkout the guest, please use the checkout option.');
         } else {
           alert(`Failed to update bill: ${response.data.message}`);
         }
@@ -1225,10 +1274,9 @@ const BillGeneration: React.FC = () => {
       const fileName = `Bill_${billData.billNo || 'unknown'}_${new Date().toISOString().slice(0, 10)}.pdf`;
       pdf.save(fileName);
       
-      // After downloading the PDF, checkout the guest and update room status
+      // After downloading the PDF, ask user if they want to checkout
       if (activeTab !== 'reservation') {
-        await handleCheckoutAndRoomStatusUpdate();
-        console.log('Checkout process completed after PDF download');
+        console.log('PDF downloaded. User can choose to checkout separately.');
       }
     } catch (error) {
       console.error('Error generating PDF:', error);
@@ -1290,6 +1338,7 @@ const BillGeneration: React.FC = () => {
       // Convert to uppercase for consistency
       folioNo = folioNo.toUpperCase();
       
+      // For folio-based bills, generate the bill and then show checkout confirmation
       generateBillByFolio(folioNo);
     }
   };
@@ -1440,10 +1489,7 @@ const BillGeneration: React.FC = () => {
         });
         
         if (response.data.success) {
-          // After successful payment, checkout the guest and update room status
-          await handleCheckoutAndRoomStatusUpdate();
-          
-          alert('Payment submitted successfully! Guest has been checked out and room status updated.');
+          alert('Payment submitted successfully!\n\nNote: The guest has not been checked out yet.\nTo checkout the guest, please use the checkout option.');
           // Refresh the bill data to show updated payment information
           await generateBillByFolio(billData.folioNo);
           setShowPaymentForm(false);
@@ -1465,39 +1511,6 @@ const BillGeneration: React.FC = () => {
     }
   };
 
-  // Function to handle checkout and room status update
-  const handleCheckoutAndRoomStatusUpdate = async () => {
-    if (!billData) return;
-    
-    try {
-      // Find the check-in record for this folio
-      const checkInResponse = await checkInApi.getCheckInByFolio(billData.folioNo);
-      
-      if (checkInResponse.data.success && checkInResponse.data.data) {
-        const checkInData = checkInResponse.data.data;
-        
-        // Update room status to "VD" (Vacant Dirty) 
-        if (checkInData.roomId) {
-          await roomApi.updateRoomStatus(checkInData.roomId, 'VD');
-          console.log('Room status updated to VD (Vacant Dirty)');
-        }
-        
-        // Update the check-in record with checkout status and bill number
-        const checkoutDate = new Date().toISOString();
-        await checkInApi.updateCheckIn(billData.folioNo, {
-          departureDate: checkoutDate,
-          checkout: true, // Mark as checked out
-          billNo: billData.billNo // Add bill number to identify checked out records
-        });
-        console.log('Check-in record updated with checkout status and bill number');
-      }
-    } catch (error) {
-      console.error('Error during checkout process:', error);
-      // We don't throw the error to avoid interrupting the payment process
-      // but we log it for debugging purposes
-    }
-  };
-
   const listAllCheckIns = async () => {
     try {
       const inHouseRes = await checkInApi.getInHouseGuests();
@@ -1513,6 +1526,14 @@ const BillGeneration: React.FC = () => {
       console.error('Error listing check-ins:', error);
       alert('Error occurred while listing check-ins. Check console for details.');
     }
+  };
+
+  // Function to handle checkout and room status update
+  const handleCheckoutAndRoomStatusUpdate = async () => {
+    if (!billData) return;
+    
+    // Show the checkout confirmation dialog instead of window.confirm
+    setShowCheckoutConfirmation(true);
   };
 
   return (
@@ -1543,6 +1564,55 @@ const BillGeneration: React.FC = () => {
           }
         }
       `}</style>
+      
+      {/* Checkout Confirmation Modal */}
+      {showCheckoutConfirmation && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-md">
+            <div className="px-6 py-4 border-b border-gray-200">
+              <h3 className="text-lg font-semibold text-gray-900">Checkout Confirmation</h3>
+            </div>
+            <div className="px-6 py-4">
+              <p className="text-gray-700">
+                Are you sure you want to generate the bill and check out the guest?
+              </p>
+              <div className="mt-4 bg-gray-50 p-4 rounded-lg">
+                <p className="text-sm text-gray-600">
+                  <span className="font-medium">Guest Name:</span> {billData?.guestName}
+                </p>
+                <p className="text-sm text-gray-600">
+                  <span className="font-medium">Folio No:</span> {billData?.folioNo}
+                </p>
+                <p className="text-sm text-gray-600">
+                  <span className="font-medium">Room No:</span> {billData?.roomNo || 'N/A'}
+                </p>
+              </div>
+              <p className="mt-4 text-sm text-gray-600">
+                This action will:
+              </p>
+              <ul className="mt-2 text-sm text-gray-600 list-disc list-inside space-y-1">
+                <li>Check out the guest from the system</li>
+                <li>Update the room status to Vacant Dirty</li>
+                <li>Generate the final bill</li>
+              </ul>
+            </div>
+            <div className="px-6 py-4 bg-gray-50 flex justify-end space-x-3">
+              <button
+                onClick={() => handleCheckoutConfirmation(false)}
+                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleCheckoutConfirmation(true)}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+              >
+                Yes, Checkout Guest
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       
       {/* Check-ins Modal */}
       {showCheckInsModal && (
@@ -2065,6 +2135,13 @@ const BillGeneration: React.FC = () => {
                 {loading ? 'Saving...' : 'Save Bill'}
               </button>
               <button
+                onClick={handleCheckoutAndRoomStatusUpdate}
+                disabled={loading}
+                className="px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
+              >
+                {loading ? 'Checking Out...' : 'Checkout Guest'}
+              </button>
+              <button
                 onClick={() => {
                   fetchRelatedBills(billData.billNo);
                 }}
@@ -2124,7 +2201,6 @@ const BillGeneration: React.FC = () => {
   );
 };
 
-
 const RelatedBillRow: React.FC<{ bill: any }> = ({ bill }) => {
   // Calculate room charges
   const roomCharges = bill.roomCharges || 0;
@@ -2135,7 +2211,7 @@ const RelatedBillRow: React.FC<{ bill: any }> = ({ bill }) => {
   // Use fallback only if roomCharges is not explicitly set
   const finalRoomCharges = roomCharges || fallbackRoomCharges;
   
-  // Calculate additional charges from transactions (excluding room charge
+  // Calculate additional charges from transactions (excluding room charges)
   const billTransactions: any[] = bill.transactions || [];
   const totalTransactions = billTransactions
     .filter((transaction: any) => transaction.accHeadId !== 'ROOM_CHARGES')
@@ -2154,66 +2230,6 @@ const RelatedBillRow: React.FC<{ bill: any }> = ({ bill }) => {
   const balanceAmount = bill.balanceAmount !== undefined 
     ? bill.balanceAmount 
     : subtotal - advanceAmount;
-  
-  // Fetch advances from all three contexts when component mounts
-  React.useEffect(() => {
-    const fetchAllAdvances = async () => {
-      let allAdvances: any[] = [];
-      
-      // 1. Fetch advances by folio number if available
-      if (bill.folioNo) {
-        try {
-          const advancesResponse = await advanceApi.getAdvancesByFolio(bill.folioNo);
-          if (advancesResponse.data.success) {
-            allAdvances = [...allAdvances, ...advancesResponse.data.data];
-          }
-        } catch (advanceError) {
-          console.error('Failed to fetch advances by folio:', advanceError);
-        }
-      }
-      
-      // 2. Fetch advances by bill number if available
-      if (bill.billNo) {
-        try {
-          const advancesResponse = await advanceApi.getAdvancesByBill(bill.billNo);
-          if (advancesResponse.data.success) {
-            allAdvances = [...allAdvances, ...advancesResponse.data.data];
-          }
-        } catch (advanceError) {
-          console.error('Failed to fetch advances by bill:', advanceError);
-        }
-      }
-      
-      // 3. Fetch advances by reservation number if available
-      if (bill.reservationNo) {
-        try {
-          const advancesResponse = await advanceApi.getAdvancesByReservation(bill.reservationNo);
-          if (advancesResponse.data.success) {
-            allAdvances = [...allAdvances, ...advancesResponse.data.data];
-          }
-        } catch (advanceError) {
-          console.error('Failed to fetch advances by reservation:', advanceError);
-        }
-      }
-      
-      // Remove duplicate advances based on advanceId
-      const uniqueAdvances = allAdvances.filter((advance, index, self) => 
-        index === self.findIndex(a => a.advanceId === advance.advanceId)
-      );
-      
-      // Calculate total advance amount
-      const totalAdvanceAmount = uniqueAdvances.reduce((sum: number, advance: any) => sum + (advance.amount || 0), 0);
-      
-      // Update the advance amount and balance if they differ from current values
-      if (totalAdvanceAmount !== advanceAmount) {
-        // In a real implementation, we would update the parent component state here
-        // For now, we'll just log the difference
-        console.log(`Advance amount difference detected for bill ${bill.billNo}. Current: ${advanceAmount}, Calculated: ${totalAdvanceAmount}`);
-      }
-    };
-    
-    fetchAllAdvances();
-  }, [bill.folioNo, bill.billNo, bill.reservationNo, advanceAmount, subtotal]);
   
   return (
     <tr>

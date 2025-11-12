@@ -7,6 +7,7 @@ interface AuthContextType {
   login: (userName: string, password: string) => Promise<User | boolean>;
   logout: () => void;
   isLoading: boolean;
+  handleUnauthorizedError: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -102,11 +103,21 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
+  // Handle unauthorized errors (401) - clear user data and show login screen
+  const handleUnauthorizedError = () => {
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    localStorage.removeItem('loginTime');
+    setUser(null);
+    setLoginTime(null);
+  };
+
   const value = {
     user,
     login,
     logout,
     isLoading,
+    handleUnauthorizedError,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

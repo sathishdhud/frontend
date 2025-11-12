@@ -18,10 +18,12 @@ import { roomApi, reservationApi, checkInApi, masterDataApi, operationsApi, bill
 import Layout from '../components/Layout/Layout';
 import Modal from '../components/Modal';
 import RoomBillDetails from '../components/RoomBillDetails';
-
+import { handleApiError, isUnauthorizedError } from '../utils/errorHandler';
+import { useAuth } from '../contexts/AuthContext';
 
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
+  const { handleUnauthorizedError } = useAuth();
   const [rooms, setRooms] = useState<Room[]>([]);
   const [roomStats, setRoomStats] = useState<RoomStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -47,6 +49,7 @@ const Dashboard: React.FC = () => {
   const [roomTypes, setRoomTypes] = useState<RoomType[]>([]);
   const [selectedFloor, setSelectedFloor] = useState<string>('');
   const [selectedRoomType, setSelectedRoomType] = useState<string>('');
+  const [selectedStatus, setSelectedStatus] = useState<string>(''); // New state for room status filter
 
   // Operations state
   const [auditDate, setAuditDate] = useState<string>('');
@@ -612,10 +615,20 @@ const Dashboard: React.FC = () => {
         setModalType('error');
         setModalOpen(true);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to check in guest:', error);
+      
+      // Handle 401 errors specifically
+      if (isUnauthorizedError(error)) {
+        // Let the AuthContext handle the unauthorized error
+        handleUnauthorizedError();
+        return;
+      }
+      
+      const errorMessage = handleApiError(error);
+      
       setModalTitle("Error");
-      setModalMessage('Failed to check in guest. Please try again.');
+      setModalMessage(errorMessage);
       setModalType('error');
       setModalOpen(true);
     } finally {
@@ -629,6 +642,7 @@ const Dashboard: React.FC = () => {
       case 'OD': return 'bg-blue-100 text-blue-800 border border-blue-200';
       case 'OI': return 'bg-blue-100 text-blue-800 border border-blue-200';
       case 'VD': return 'bg-yellow-100 text-yellow-800 border border-yellow-200'; // Vacant Dirty
+      case 'BL': return 'bg-gray-100 text-gray-800 border border-gray-200'; // Blocked
       default: return 'bg-gray-100 text-gray-800 border border-gray-200';
     }
   };
@@ -639,6 +653,7 @@ const Dashboard: React.FC = () => {
       case 'OD': return 'Occupied';
       case 'OI': return 'Occupied';
       case 'VD': return 'Vacant Dirty';
+      case 'BL': return 'Blocked';
       default: return status;
     }
   };
@@ -649,6 +664,7 @@ const Dashboard: React.FC = () => {
       case 'OD': return <UserGroupIcon className="w-4 h-4" />;
       case 'OI': return <UserGroupIcon className="w-4 h-4" />;
       case 'VD': return <ExclamationTriangleIcon className="w-4 h-4" />;
+      case 'BL': return <ExclamationTriangleIcon className="w-4 h-4" />;
       default: return <HomeIcon className="w-4 h-4" />;
     }
   };
@@ -657,16 +673,25 @@ const Dashboard: React.FC = () => {
   const handleFloorFilter = (floor: string) => {
     setSelectedFloor(floor);
     setSelectedRoomType(''); // Clear room type filter when floor is selected
+    setSelectedStatus(''); // Clear status filter when floor is selected
   };
 
   const handleRoomTypeFilter = (roomTypeId: string) => {
     setSelectedRoomType(roomTypeId);
     setSelectedFloor(''); // Clear floor filter when room type is selected
+    setSelectedStatus(''); // Clear status filter when room type is selected
+  };
+
+  const handleStatusFilter = (status: string) => {
+    setSelectedStatus(status);
+    setSelectedFloor(''); // Clear floor filter when status is selected
+    setSelectedRoomType(''); // Clear room type filter when status is selected
   };
 
   const handleRefresh = () => {
     setSelectedFloor('');
     setSelectedRoomType('');
+    setSelectedStatus(''); // Clear status filter on refresh
   };
 
   const handleViewBill = (room: Room) => {
@@ -677,7 +702,10 @@ const Dashboard: React.FC = () => {
   const handleRoomShift = async (room: Room) => {
     // Only allow room shifting for occupied rooms
     if (room.status !== 'OD' && room.status !== 'OI') {
-      alert('Room shifting is only available for occupied rooms.');
+      setModalTitle("Validation Error");
+      setModalMessage("Room shifting is only available for occupied rooms.");
+      setModalType('warning');
+      setModalOpen(true);
       return;
     }
     
@@ -764,25 +792,17 @@ const Dashboard: React.FC = () => {
       }
     } catch (error: any) {
       console.error('Failed to shift room:', error);
-      let errorMessage = 'Failed to shift room. Please try again.';
       
-      if (error.response) {
-        if (error.response.data?.message) {
-          errorMessage = error.response.data.message;
-        } else if (error.response.status === 400) {
-          errorMessage = 'Invalid request. Please check the data and try again.';
-        } else if (error.response.status === 401) {
-          errorMessage = 'Unauthorized. Please log in again.';
-        } else if (error.response.status === 405) {
-          errorMessage = 'Room shift operation is not supported. Please contact system administrator.';
-        } else {
-          errorMessage = `Server error (${error.response.status}). Please try again.`;
-        }
-      } else if (error.request) {
-        errorMessage = 'Network error. Please check your connection and try again.';
-      } else {
-        errorMessage = error.message || errorMessage;
+      // Handle 401 errors specifically
+      if (isUnauthorizedError(error)) {
+        // Let the AuthContext handle the unauthorized error
+        handleUnauthorizedError();
+        return;
       }
+      
+      const errorMessage = handleApiError(error, {
+        405: () => 'Room shift operation is not supported. Please contact system administrator.'
+      });
       
       setModalTitle("Error");
       setModalMessage(errorMessage);
@@ -805,6 +825,21 @@ const Dashboard: React.FC = () => {
     // Apply room type filter
     if (selectedRoomType && room.roomTypeId !== selectedRoomType) {
       return false;
+    }
+    // Apply status filter
+    if (selectedStatus) {
+      if (selectedStatus === 'occupied' && !(room.status === 'OD' || room.status === 'OI')) {
+        return false;
+      }
+      if (selectedStatus === 'vacant' && !(room.status === 'VR' || room.status === 'VD')) {
+        return false;
+      }
+      if (selectedStatus === 'blocked' && room.status !== 'BL') {
+        return false;
+      }
+      if (selectedStatus === 'vacant_dirty' && room.status !== 'VD') {
+        return false;
+      }
     }
     return true;
   }).sort((a, b) => {
@@ -919,6 +954,43 @@ const Dashboard: React.FC = () => {
           </div>
         </div>
 
+        {/* Room Status Filters */}
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
+          <h2 className="text-lg font-semibold text-gray-900 mb-4">Room Status Filters</h2>
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={handleRefresh}
+              className={`px-3 py-1 text-sm rounded ${!selectedStatus ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+            >
+              All Statuses
+            </button>
+            <button
+              onClick={() => handleStatusFilter('occupied')}
+              className={`px-3 py-1 text-sm rounded ${selectedStatus === 'occupied' ? 'bg-blue-600 text-white' : 'bg-blue-100 text-blue-700 hover:bg-blue-200'}`}
+            >
+              Occupied
+            </button>
+            <button
+              onClick={() => handleStatusFilter('vacant')}
+              className={`px-3 py-1 text-sm rounded ${selectedStatus === 'vacant' ? 'bg-green-600 text-white' : 'bg-green-100 text-green-700 hover:bg-green-200'}`}
+            >
+              Vacant
+            </button>
+            <button
+              onClick={() => handleStatusFilter('vacant_dirty')}
+              className={`px-3 py-1 text-sm rounded ${selectedStatus === 'vacant_dirty' ? 'bg-yellow-600 text-white' : 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200'}`}
+            >
+              Vacant Dirty
+            </button>
+            <button
+              onClick={() => handleStatusFilter('blocked')}
+              className={`px-3 py-1 text-sm rounded ${selectedStatus === 'blocked' ? 'bg-gray-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}`}
+            >
+              Blocked
+            </button>
+          </div>
+        </div>
+
         {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
           <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200">
@@ -991,8 +1063,9 @@ const Dashboard: React.FC = () => {
               key={room.roomId} 
               className={`rounded-xl shadow-md border-2 overflow-hidden cursor-pointer transition-all duration-200 hover:shadow-lg hover:-translate-y-1 flex flex-col ${
                 room.status === 'VR' ? 'bg-green-100 border-green-300 hover:border-green-500' : 
-                room.status === 'OD' || room.status === 'OI' ? 'bg-red-100 border-red-300 hover:border-red-500' : 
+                room.status === 'OD' || room.status === 'OI' ? 'bg-blue-100 border-blue-300 hover:border-blue-500' : 
                 room.status === 'VD' ? 'bg-yellow-100 border-yellow-300 hover:border-yellow-500' : // Vacant Dirty status
+                room.status === 'BL' ? 'bg-gray-100 border-gray-300 hover:border-gray-500' : // Blocked status
                 'bg-gray-100 border-gray-300 hover:border-gray-500'
               }`}
               onClick={() => handleRoomClick(room)}
@@ -1002,6 +1075,7 @@ const Dashboard: React.FC = () => {
                   room.status === 'VR' ? 'text-green-800' : 
                   room.status === 'OD' || room.status === 'OI' ? 'text-red-800' : 
                   room.status === 'VD' ? 'text-yellow-800' : // Vacant Dirty status
+                  room.status === 'BL' ? 'text-gray-800' : // Blocked status
                   'text-gray-800'
                 }`}>
                   {room.roomNo}
@@ -1010,6 +1084,7 @@ const Dashboard: React.FC = () => {
                   room.status === 'VR' ? 'text-green-700' : 
                   room.status === 'OD' || room.status === 'OI' ? 'text-red-700' : 
                   room.status === 'VD' ? 'text-yellow-700' : // Vacant Dirty status
+                  room.status === 'BL' ? 'text-gray-700' : // Blocked status
                   'text-gray-700'
                 }`}>
                   Floor: {room.floor}
@@ -1019,6 +1094,7 @@ const Dashboard: React.FC = () => {
                     room.status === 'VR' ? 'text-green-700' : 
                     room.status === 'OD' || room.status === 'OI' ? 'text-red-700' : 
                     room.status === 'VD' ? 'text-yellow-700' : // Vacant Dirty status
+                    room.status === 'BL' ? 'text-gray-700' : // Blocked status
                     'text-gray-700'
                   }`}>
                     Type: {room.roomTypeName}
@@ -1028,6 +1104,7 @@ const Dashboard: React.FC = () => {
                   room.status === 'VR' ? 'bg-green-200 text-green-900' :
                   room.status === 'OD' || room.status === 'OI' ? 'bg-red-200 text-red-900' :
                   room.status === 'VD' ? 'bg-yellow-200 text-yellow-900' : // Vacant Dirty status
+                  room.status === 'BL' ? 'bg-gray-200 text-gray-900' : // Blocked status
                   'bg-gray-200 text-gray-900'
                 }`}>
                   {getStatusIcon(room.status)}
@@ -1038,6 +1115,7 @@ const Dashboard: React.FC = () => {
                 room.status === 'VR' ? 'bg-green-50 border-green-200' : 
                 room.status === 'OD' || room.status === 'OI' ? 'bg-red-50 border-red-200' : 
                 room.status === 'VD' ? 'bg-yellow-50 border-yellow-200' : // Vacant Dirty status
+                room.status === 'BL' ? 'bg-gray-50 border-gray-200' : // Blocked status
                 'bg-gray-50 border-gray-200'
               }`}>
                 <button
@@ -1049,6 +1127,7 @@ const Dashboard: React.FC = () => {
                     room.status === 'VR' ? 'text-green-700 hover:text-green-900' : 
                     room.status === 'OD' || room.status === 'OI' ? 'text-red-700 hover:text-red-900' : 
                     room.status === 'VD' ? 'text-yellow-700 hover:text-yellow-900' : // Vacant Dirty status
+                    room.status === 'BL' ? 'text-gray-700 hover:text-gray-900' : // Blocked status
                     'text-gray-700 hover:text-gray-900'
                   }`}
                 >
@@ -1083,11 +1162,15 @@ const Dashboard: React.FC = () => {
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        alert('Billing is only available for occupied rooms.');
+                        setModalTitle("Information");
+                        setModalMessage("Billing is only available for occupied rooms.");
+                        setModalType('info');
+                        setModalOpen(true);
                       }}
                       className={`text-xs flex items-center cursor-not-allowed ${
                         room.status === 'VR' ? 'text-green-500' : 
                         room.status === 'VD' ? 'text-yellow-500' : // Vacant Dirty status
+                        room.status === 'BL' ? 'text-gray-500' : // Blocked status
                         'text-gray-500'
                       }`}
                       disabled
@@ -1098,11 +1181,15 @@ const Dashboard: React.FC = () => {
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        alert('Room shifting is only available for occupied rooms.');
+                        setModalTitle("Information");
+                        setModalMessage("Room shifting is only available for occupied rooms.");
+                        setModalType('info');
+                        setModalOpen(true);
                       }}
                       className={`text-xs flex items-center cursor-not-allowed ${
                         room.status === 'VR' ? 'text-green-500' : 
                         room.status === 'VD' ? 'text-yellow-500' : // Vacant Dirty status
+                        room.status === 'BL' ? 'text-gray-500' : // Blocked status
                         'text-gray-500'
                       }`}
                       disabled
@@ -1131,7 +1218,7 @@ const Dashboard: React.FC = () => {
                 </svg>
               </button>
             </div>
-                        
+                      
             <form onSubmit={handleCheckInSubmit}>
               {/* Tabs */}
               <div className="border-b border-gray-200 mb-6">

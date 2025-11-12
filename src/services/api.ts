@@ -53,17 +53,8 @@ apiClient.interceptors.request.use((config) => {
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
-      // Clear local storage and redirect to login
-      localStorage.removeItem('token');
-      localStorage.removeItem('user');
-      localStorage.removeItem('loginTime');
-      
-      // Redirect to login page if we're in a browser environment
-      if (typeof window !== 'undefined') {
-        window.location.href = '/login';
-      }
-    }
+    // Let the application handle 401 errors instead of automatically redirecting
+    // This prevents automatic logout when token validation fails
     return Promise.reject(error);
   }
 );

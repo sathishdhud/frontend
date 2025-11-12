@@ -641,6 +641,24 @@ const BillGeneration: React.FC = () => {
   const handleCheckoutAndRoomStatusUpdate = async () => {
     if (!billData) return;
     
+    // Ask for confirmation before checkout
+    const confirmCheckout = window.confirm(
+      `Are you sure you want to generate the bill and check out the guest?\n\n` +
+      `Guest Name: ${billData.guestName}\n` +
+      `Folio No: ${billData.folioNo}\n` +
+      `Room No: ${billData.roomNo || 'N/A'}\n\n` +
+      `This action will:\n` +
+      `1. Check out the guest from the system\n` +
+      `2. Update the room status to Vacant Dirty\n` +
+      `3. Generate the final bill\n\n` +
+      `Do you want to proceed with checkout?`
+    );
+    
+    if (!confirmCheckout) {
+      console.log('Checkout cancelled by user');
+      return;
+    }
+    
     try {
       // Find the check-in record for this folio
       const checkInResponse = await checkInApi.getCheckInByFolio(billData.folioNo);
@@ -662,9 +680,14 @@ const BillGeneration: React.FC = () => {
           billNo: billData.billNo // Add bill number to identify checked out records
         });
         console.log('Check-in record updated with checkout status and bill number');
+        
+        // Show success message
+        alert(`Guest ${billData.guestName} has been successfully checked out.\nRoom status updated to Vacant Dirty.`);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error during checkout process:', error);
+      const errorMessage = error.message || error.toString() || 'Unknown error occurred';
+      alert(`Error during checkout process: ${errorMessage}`);
       // We don't throw the error to avoid interrupting the payment process
       // but we log it for debugging purposes
     }
@@ -714,9 +737,7 @@ const BillGeneration: React.FC = () => {
         });
         
         if (response.data.success) {
-          // After successful bill update, checkout the guest and update room status
-          await handleCheckoutAndRoomStatusUpdate();
-          alert('Bill updated successfully! Guest has been checked out and room status updated.');
+          alert('Bill updated successfully!\n\nNote: The guest has not been checked out yet.\nTo checkout the guest, please use the checkout option.');
         } else {
           alert(`Failed to update bill: ${response.data.message}`);
         }
@@ -1574,6 +1595,13 @@ const BillGeneration: React.FC = () => {
                 className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
               >
                 {loading ? 'Saving...' : 'Save Bill'}
+              </button>
+              <button
+                onClick={handleCheckoutAndRoomStatusUpdate}
+                disabled={loading}
+                className="px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50"
+              >
+                {loading ? 'Checking Out...' : 'Checkout Guest'}
               </button>
               <button
                 onClick={() => {

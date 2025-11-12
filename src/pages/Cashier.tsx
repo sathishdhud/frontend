@@ -122,10 +122,6 @@ const Cashier = () => {
   const [showSettlementBillsHelp, setShowSettlementBillsHelp] = useState(false);
   const [settlementBillsLoading, setSettlementBillsLoading] = useState(false);
   
-  // Sales Receipts state (removed - now handled by SalesReceipts component)
-  
-  // Split Bill state (removed - now handled by SplitBill component)
-  
   // Summary state
   const [summary, setSummary] = useState({
     totalToday: 0,
@@ -604,6 +600,8 @@ const Cashier = () => {
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value, type } = e.target;
+    
+    // Update form state
     setFormData(prev => ({
       ...prev,
       [name]: type === 'number' ? Number(value) : value,
@@ -735,10 +733,6 @@ const Cashier = () => {
     }
   };
 
-  // handleSalesInputChange function removed - now handled by SalesReceipts component
-
-  // handleSplitBillInputChange function removed - now handled by SplitBill component
-
   // Function to auto-fill guest name based on context value
   const autoFillGuestName = async (contextValue: string) => {
     // Reset the attempted flag and error when context value is cleared
@@ -764,7 +758,7 @@ const Cashier = () => {
       try {
         if (recordSubTab === 'reservation') {
           // Find reservation in in-house reservations
-          const reservation = inHouseReservations.find(r => r.reservationNo === contextValue);
+          const reservation = inHouseReservations.find(r => String(r.reservationNo) === String(contextValue));
           if (reservation) {
             setFormData(prev => ({ ...prev, guestName: reservation.guestName }));
             setBillInfo({ folioNo: '', guestName: '' }); // Clear bill info
@@ -775,7 +769,7 @@ const Cashier = () => {
           }
         } else if (recordSubTab === 'bill') {
           // Find bill in generated bills
-          const bill = generatedBills.find(b => b.billNo === contextValue);
+          const bill = generatedBills.find(b => String(b.billNo) === String(contextValue));
           if (bill) {
             const guestName = bill.guestName || '';
             const folioNo = bill.folioNo || '';
@@ -821,7 +815,7 @@ const Cashier = () => {
 
       try {
         // First, find the room in in-house rooms
-        const room = inHouseRooms.find((r: Room) => r.roomNo === roomNo);
+        const room = inHouseRooms.find((r: Room) => String(r.roomNo) === String(roomNo));
         if (room) {
           // Now get the guest name and folio number by room ID
           const checkInRes = await checkInApi.getCheckInByRoom(room.roomId);
@@ -1089,8 +1083,6 @@ const Cashier = () => {
     setDebounceTimer(timer);
   };
 
-  // Function to auto-fill guest name for split bill based on folio number (removed - now handled by SplitBill component)
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -1170,7 +1162,7 @@ const Cashier = () => {
           // First get the room ID by room number
           const roomsRes = await roomApi.getRooms();
           if (roomsRes.data.success) {
-            const room = roomsRes.data.data.find((r: Room) => r.roomNo === formData.roomNo);
+            const room = roomsRes.data.data.find((r: Room) => String(r.roomNo) === String(formData.roomNo));
             if (room) {
               // Now get the check-in data by room ID
               const checkInRes = await checkInApi.getCheckInByRoom(room.roomId);
@@ -1403,7 +1395,6 @@ const Cashier = () => {
     console.log('Deleting advance with ID:', advanceId);
     
     // Validate advanceId
-    
     
     
     
@@ -1997,7 +1988,7 @@ const Cashier = () => {
                 bills.push(billResponse.data.data);
               }
             } catch (error) {
-              // Continue to next guest if bill generation fails for this one
+              // Continue to next guest if bill generation fails
               console.error(`Error generating bill for folio ${guest.folioNo}:`, error);
             }
           }
@@ -2086,10 +2077,6 @@ const Cashier = () => {
       autoFillGuestNameForSettlement(value);
     }
   };
-
-  // Handle sales receipts (removed - now handled by SalesReceipts component
-
-  // Handle split bill (removed - now handled by SplitBill component)
 
   return (
     <Layout>
@@ -3124,238 +3111,238 @@ const Cashier = () => {
               </>
             )}
             {activeTab === 'settlement' && (
-    <>
-      <div className="p-6 border-b border-gray-200">
-        <h2 className="text-xl font-semibold text-gray-900">Settlement Entry</h2>
-      </div>
-      <form onSubmit={handleSettlementEntry} className="p-6 space-y-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* Bill Number */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Bill Number
-            </label>
-            <div className="flex space-x-2">
-              <input
-                type="text"
-                name="billNo"
-                value={settlementData.billNo}
-                onChange={handleSettlementInputChange}
-                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                required
-              />
-              <button
-                type="button"
-                onClick={() => {
-                  fetchAvailableSettlementBills();
-                  setShowSettlementBillsHelp(true);
-                }}
-                className="px-3 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
-                title="Select from available bills"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 16l2.879-2.879m0 0a3 3 0 104.243-4.242 3 3 0 00-4.243 4.242zM21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                </svg>
-              </button>
-            </div>
-          </div>
-          {/* Guest Name */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Guest Name
-            </label>
-            <input
-              type="text"
-              name="guestName"
-              value={settlementData.guestName}
-              onChange={handleSettlementInputChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-              readOnly
-            />
-          </div>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* Settlement Type */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Settlement Type
-            </label>
-            <select
-              name="settlementTypeId"
-              value={settlementData.settlementTypeId}
-              onChange={handleSettlementInputChange}
-              required
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
-              <option value="">Select settlement type</option>
-              {settlementTypes.map(type => (
-                <option key={type.id} value={type.id}>
-                  {type.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          {/* Amount */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Amount
-            </label>
-            <input
-              type="number"
-              name="amount"
-              value={settlementData.amount}
-              onChange={handleSettlementInputChange}
-              min="0"
-              step="0.01"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              required
-            />
-          </div>
-        </div>
-        {/* Refund Information */}
-        {settlementData.isRefund && settlementData.refundAmount > 0 && (
-          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-            <div className="flex items-center">
-              <svg className="h-5 w-5 text-yellow-400 mr-2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-              </svg>
-              <h3 className="text-sm font-medium text-yellow-800">Refund Required</h3>
-            </div>
-            <div className="mt-2 text-sm text-yellow-700">
-              <p>Advance amount exceeds charges by ₹{settlementData.refundAmount.toFixed(2)}. A refund voucher will be generated.</p>
-            </div>
-          </div>
-        )}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* Remarks */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Remarks
-            </label>
-            <textarea
-              name="remarks"
-              value={settlementData.remarks}
-              onChange={handleSettlementInputChange}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              rows={3}
-            />
-          </div>
-        </div>
-        <div className="flex justify-end">
-          <button
-            type="submit"
-            className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
-          >
-            {loading ? 'Processing...' : 'Record Settlement'}
-          </button>
-        </div>
-      </form>
-      
-      {/* Bills Help Modal for Settlement */}
-      {showSettlementBillsHelp && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[80vh] overflow-hidden">
-            <div className="p-4 border-b border-gray-200 flex justify-between items-center">
-              <h3 className="text-lg font-medium text-gray-900">Select Bill for Settlement</h3>
-              <button
-                onClick={() => setShowSettlementBillsHelp(false)}
-                className="text-gray-400 hover:text-gray-500"
-              >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path>
-                </svg>
-              </button>
-            </div>
-            <div className="p-4 overflow-y-auto max-h-[60vh]">
-              {settlementBillsLoading ? (
-                <div className="flex justify-center items-center h-48">
-                  <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-600"></div>
+              <>
+                <div className="p-6 border-b border-gray-200">
+                  <h2 className="text-xl font-semibold text-gray-900">Settlement Entry</h2>
                 </div>
-              ) : (
-                <>
-                  {availableSettlementBills.length > 0 ? (
-                    <div className="overflow-x-auto">
-                      <table className="min-w-full divide-y divide-gray-200">
-                        <thead className="bg-gray-50">
-                          <tr>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Bill Number</th>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Guest Name</th>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total Amount</th>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Advance Amount</th>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amount Due</th>
-                            <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
-                          </tr>
-                        </thead>
-                        <tbody className="bg-white divide-y divide-gray-200">
-                          {availableSettlementBills.map((bill, index) => {
-                            const totalAmount = bill.totalAmount || 0;
-                            const advanceAmount = bill.advanceAmount || 0;
-                            const amountDue = Math.max(0, totalAmount - advanceAmount);
-                            const isRefund = advanceAmount > totalAmount;
-                            const refundAmount = isRefund ? advanceAmount - totalAmount : 0;
-                            
-                            return (
-                              <tr key={bill.billNo} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
-                                <td className="px-4 py-3 text-sm text-gray-900 font-medium">{bill.billNo}</td>
-                                <td className="px-4 py-3 text-sm text-gray-700">{bill.guestName}</td>
-                                <td className="px-4 py-3 text-sm text-gray-900 font-medium">₹{totalAmount.toFixed(2)}</td>
-                                <td className="px-4 py-3 text-sm text-gray-900 font-medium">₹{advanceAmount.toFixed(2)}</td>
-                                <td className="px-4 py-3 text-sm text-gray-900 font-medium">
-                                  {isRefund ? (
-                                    <span className="text-red-600">Refund: ₹{refundAmount.toFixed(2)}</span>
-                                  ) : (
-                                    `₹${amountDue.toFixed(2)}`
-                                  )}
-                                </td>
-                                <td className="px-4 py-3 text-sm text-gray-700">
-                                  <button
-                                    onClick={() => {
-                                      setSettlementData(prev => ({
-                                        ...prev,
-                                        billNo: bill.billNo,
-                                        guestName: bill.guestName,
-                                        amount: amountDue,
-                                        isRefund: isRefund,
-                                        refundAmount: refundAmount
-                                      }));
-                                      setShowSettlementBillsHelp(false);
-                                    }}
-                                    className="px-3 py-1 bg-indigo-600 text-white text-xs font-medium rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
-                                  >
-                                    Select
-                                  </button>
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
+                <form onSubmit={handleSettlementEntry} className="p-6 space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Bill Number */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Bill Number
+                      </label>
+                      <div className="flex space-x-2">
+                        <input
+                          type="text"
+                          name="billNo"
+                          value={settlementData.billNo}
+                          onChange={handleSettlementInputChange}
+                          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                          required
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            fetchAvailableSettlementBills();
+                            setShowSettlementBillsHelp(true);
+                          }}
+                          className="px-3 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
+                          title="Select from available bills"
+                        >
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 16l2.879-2.879m0 0a3 3 0 104.243-4.242 3 3 0 00-4.243 4.242zM21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                          </svg>
+                        </button>
+                      </div>
                     </div>
-                  ) : (
-                    <div className="text-center py-8">
-                      <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
-                      </svg>
-                      <h3 className="mt-2 text-sm font-medium text-gray-900">No bills found</h3>
-                      <p className="mt-1 text-sm text-gray-500">There are no available bills for settlement.</p>
+                    {/* Guest Name */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Guest Name
+                      </label>
+                      <input
+                        type="text"
+                        name="guestName"
+                        value={settlementData.guestName}
+                        onChange={handleSettlementInputChange}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                        readOnly
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Settlement Type */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Settlement Type
+                      </label>
+                      <select
+                        name="settlementTypeId"
+                        value={settlementData.settlementTypeId}
+                        onChange={handleSettlementInputChange}
+                        required
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      >
+                        <option value="">Select settlement type</option>
+                        {settlementTypes.map(type => (
+                          <option key={type.id} value={type.id}>
+                            {type.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    {/* Amount */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Amount
+                      </label>
+                      <input
+                        type="number"
+                        name="amount"
+                        value={settlementData.amount}
+                        onChange={handleSettlementInputChange}
+                        min="0"
+                        step="0.01"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        required
+                      />
+                    </div>
+                  </div>
+                  {/* Refund Information */}
+                  {settlementData.isRefund && settlementData.refundAmount > 0 && (
+                    <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                      <div className="flex items-center">
+                        <svg className="h-5 w-5 text-yellow-400 mr-2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                        </svg>
+                        <h3 className="text-sm font-medium text-yellow-800">Refund Required</h3>
+                      </div>
+                      <div className="mt-2 text-sm text-yellow-700">
+                        <p>Advance amount exceeds charges by ₹{settlementData.refundAmount.toFixed(2)}. A refund voucher will be generated.</p>
+                      </div>
                     </div>
                   )}
-                </>
-              )}
-            </div>
-            <div className="p-4 border-t border-gray-200 flex justify-end">
-              <button
-                onClick={() => setShowSettlementBillsHelp(false)}
-                className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </>
-  )}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Remarks */}
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Remarks
+                      </label>
+                      <textarea
+                        name="remarks"
+                        value={settlementData.remarks}
+                        onChange={handleSettlementInputChange}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                        rows={3}
+                      />
+                    </div>
+                  </div>
+                  <div className="flex justify-end">
+                    <button
+                      type="submit"
+                      className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                    >
+                      {loading ? 'Processing...' : 'Record Settlement'}
+                    </button>
+                  </div>
+                </form>
+                
+                {/* Bills Help Modal for Settlement */}
+                {showSettlementBillsHelp && (
+                  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                    <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[80vh] overflow-hidden">
+                      <div className="p-4 border-b border-gray-200 flex justify-between items-center">
+                        <h3 className="text-lg font-medium text-gray-900">Select Bill for Settlement</h3>
+                        <button
+                          onClick={() => setShowSettlementBillsHelp(false)}
+                          className="text-gray-400 hover:text-gray-500"
+                        >
+                          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12"></path>
+                          </svg>
+                        </button>
+                      </div>
+                      <div className="p-4 overflow-y-auto max-h-[60vh]">
+                        {settlementBillsLoading ? (
+                          <div className="flex justify-center items-center h-48">
+                            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-indigo-600"></div>
+                          </div>
+                        ) : (
+                          <>
+                            {availableSettlementBills.length > 0 ? (
+                              <div className="overflow-x-auto">
+                                <table className="min-w-full divide-y divide-gray-200">
+                                  <thead className="bg-gray-50">
+                                    <tr>
+                                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Bill Number</th>
+                                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Guest Name</th>
+                                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Total Amount</th>
+                                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Advance Amount</th>
+                                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amount Due</th>
+                                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody className="bg-white divide-y divide-gray-200">
+                                    {availableSettlementBills.map((bill, index) => {
+                                      const totalAmount = bill.totalAmount || 0;
+                                      const advanceAmount = bill.advanceAmount || 0;
+                                      const amountDue = Math.max(0, totalAmount - advanceAmount);
+                                      const isRefund = advanceAmount > totalAmount;
+                                      const refundAmount = isRefund ? advanceAmount - totalAmount : 0;
+                                      
+                                      return (
+                                        <tr key={bill.billNo} className={index % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                                          <td className="px-4 py-3 text-sm text-gray-900 font-medium">{bill.billNo}</td>
+                                          <td className="px-4 py-3 text-sm text-gray-700">{bill.guestName}</td>
+                                          <td className="px-4 py-3 text-sm text-gray-900 font-medium">₹{totalAmount.toFixed(2)}</td>
+                                          <td className="px-4 py-3 text-sm text-gray-900 font-medium">₹{advanceAmount.toFixed(2)}</td>
+                                          <td className="px-4 py-3 text-sm text-gray-900 font-medium">
+                                            {isRefund ? (
+                                              <span className="text-red-600">Refund: ₹{refundAmount.toFixed(2)}</span>
+                                            ) : (
+                                              `₹${amountDue.toFixed(2)}`
+                                            )}
+                                          </td>
+                                          <td className="px-4 py-3 text-sm text-gray-700">
+                                            <button
+                                              onClick={() => {
+                                                setSettlementData(prev => ({
+                                                  ...prev,
+                                                  billNo: bill.billNo,
+                                                  guestName: bill.guestName,
+                                                  amount: amountDue,
+                                                  isRefund: isRefund,
+                                                  refundAmount: refundAmount
+                                                }));
+                                                setShowSettlementBillsHelp(false);
+                                              }}
+                                              className="px-3 py-1 bg-indigo-600 text-white text-xs font-medium rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+                                            >
+                                              Select
+                                            </button>
+                                          </td>
+                                        </tr>
+                                      );
+                                    })}
+                                  </tbody>
+                                </table>
+                              </div>
+                            ) : (
+                              <div className="text-center py-8">
+                                <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                                </svg>
+                                <h3 className="mt-2 text-sm font-medium text-gray-900">No bills found</h3>
+                                <p className="mt-1 text-sm text-gray-500">There are no available bills for settlement.</p>
+                              </div>
+                            )}
+                          </>
+                        )}
+                      </div>
+                      <div className="p-4 border-t border-gray-200 flex justify-end">
+                        <button
+                          onClick={() => setShowSettlementBillsHelp(false)}
+                          className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2"
+                        >
+                          Close
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
             {activeTab === 'sales' && (
               <>
                 <div className="p-6 border-b border-gray-200">
